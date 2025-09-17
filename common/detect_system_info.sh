@@ -275,8 +275,6 @@ detect_virtualization() {
                 logD "PowerVM Micro-Partitioning detected"
             fi
         fi
-            fi
-        fi
         
     elif [ "$os_name" = "SunOS" ]; then
         # Solaris - Check for zones/containers
