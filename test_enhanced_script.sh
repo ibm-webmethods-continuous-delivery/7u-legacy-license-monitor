@@ -17,11 +17,33 @@ echo "- Virt/OS: $(ls -la common/ibm-eligible-virt-and-os.csv)"
 # Run the script with debug output
 echo "Running enhanced script..."
 cd common
-bash detect_system_info.sh ../test_enhanced_output.csv
+# Use bash if available, otherwise fall back to sh
+if command -v bash >/dev/null 2>&1; then
+    bash detect_system_info.sh ../test-detection-output
+else
+    sh detect_system_info.sh ../test-detection-output
+fi
 echo "Script completed. Exit code: $?"
 
 # Display results
-echo "Results:"
-cat ../test_enhanced_output.csv
+echo "Results from latest session:"
+cd ..
+LATEST_SESSION=$(ls -1t test-detection-output/ | head -1)
+if [ -n "$LATEST_SESSION" ]; then
+    echo "Session directory: test-detection-output/$LATEST_SESSION"
+    echo ""
+    echo "=== CSV Results ==="
+    cat "test-detection-output/$LATEST_SESSION/inspect_output.csv"
+    echo ""
+    echo "=== Session Log ==="
+    cat "test-detection-output/$LATEST_SESSION/session.log"
+    echo ""
+    if [ "$INSPECT_DEBUG" = "ON" ]; then
+        echo "=== Debug Files Created ==="
+        ls -la "test-detection-output/$LATEST_SESSION/"
+    fi
+else
+    echo "No session directory found"
+fi
 
 echo "Test completed."

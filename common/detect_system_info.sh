@@ -37,6 +37,11 @@ OUTPUT_FILE=""
 # Global variable for script directory (to find CSV files)
 SCRIPT_DIR=""
 
+# Global variable for output directory and session folder
+OUTPUT_DIR=""
+SESSION_DIR=""
+SESSION_LOG=""
+
 # Function to write a parameter-value pair to CSV
 write_csv() {
     local parameter="$1"
@@ -48,12 +53,43 @@ write_csv() {
 # Function to log important information
 log() {
     echo "[INFO] $1" >&2
+    if [ -n "$SESSION_LOG" ]; then
+        echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
+    fi
 }
 
 # Function to log debug information if INSPECT_DEBUG=ON
 logD() {
     if [ "$INSPECT_DEBUG" = "ON" ]; then
         echo "[DEBUG] $1" >&2
+        if [ -n "$SESSION_LOG" ]; then
+            echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
+        fi
+    fi
+}
+
+# Function to run command with debug output capture
+run_debug_cmd() {
+    local cmd="$1"
+    local cmd_name="$2"
+    
+    if [ "$INSPECT_DEBUG" = "ON" ] && [ -n "$SESSION_DIR" ]; then
+        logD "Running command: $cmd"
+        local out_file="${SESSION_DIR}/${cmd_name}.out"
+        local err_file="${SESSION_DIR}/${cmd_name}.err"
+        
+        # Run command and capture both stdout and stderr
+        eval "$cmd" >"$out_file" 2>"$err_file"
+        local exit_code=$?
+        
+        logD "Command '$cmd' completed with exit code: $exit_code"
+        logD "Output saved to: $out_file"
+        logD "Errors saved to: $err_file"
+        
+        return $exit_code
+    else
+        # Regular execution without debug capture
+        eval "$cmd"
     fi
 }
 
@@ -277,7 +313,9 @@ detect_virtualization() {
         # Check for micro-partitioning
         logD "Checking AIX micro-partitioning"
         if command -v lparstat >/dev/null 2>&1; then
-            if lparstat -i 2>/dev/null | grep -q "Shared"; then
+            run_debug_cmd "lparstat" "lparstat"
+            run_debug_cmd "lparstat -i" "lparstat-i"
+            if lparstat -i 2>/dev/null | grep "Shared" >/dev/null 2>&1; then
                 IS_VIRTUALIZED="yes"
                 VIRT_TYPE="PowerVM - Micro-Partitioning"
                 logD "PowerVM Micro-Partitioning detected"
@@ -300,9 +338,10 @@ detect_virtualization() {
         # Check for Oracle VM Server for SPARC (LDoms)
         logD "Checking Oracle VM Server for SPARC (LDoms)"
         if command -v virtinfo >/dev/null 2>&1; then
+            run_debug_cmd "virtinfo" "virtinfo"
             VIRT_INFO=$(virtinfo 2>/dev/null)
             logD "virtinfo output: ${VIRT_INFO}"
-            if echo "$VIRT_INFO" | grep -q "LDoms"; then
+            if echo "$VIRT_INFO" | grep "LDoms" >/dev/null 2>&1; then
                 IS_VIRTUALIZED="yes"
                 VIRT_TYPE="Oracle VM Server for SPARC"
                 logD "Oracle VM Server for SPARC detected"
@@ -315,7 +354,7 @@ detect_virtualization() {
         
         # Check for hypervisor flag in CPU
         logD "Checking for hypervisor flag in /proc/cpuinfo"
-        if grep -q "hypervisor" /proc/cpuinfo 2>/dev/null; then
+        if grep "hypervisor" /proc/cpuinfo >/dev/null 2>&1; then
             IS_VIRTUALIZED="yes"
             logD "Hypervisor flag found in CPU info"
         fi
@@ -323,6 +362,10 @@ detect_virtualization() {
         # Check DMI information
         if command -v dmidecode >/dev/null 2>&1; then
             logD "Using dmidecode for hardware detection"
+            run_debug_cmd "dmidecode -s system-manufacturer" "dmidecode-manufacturer"
+            run_debug_cmd "dmidecode -s system-product-name" "dmidecode-product"
+            run_debug_cmd "dmidecode -s system-version" "dmidecode-version"
+            
             DMI_SYS_VENDOR=$(dmidecode -s system-manufacturer 2>/dev/null | tr '[:upper:]' '[:lower:]')
             DMI_SYS_PRODUCT=$(dmidecode -s system-product-name 2>/dev/null | tr '[:upper:]' '[:lower:]')
             DMI_SYS_VERSION=$(dmidecode -s system-version 2>/dev/null | tr '[:upper:]' '[:lower:]')
@@ -334,7 +377,7 @@ detect_virtualization() {
             case "$DMI_SYS_VENDOR" in
                 *vmware*)
                     IS_VIRTUALIZED="yes"
-                    if echo "$DMI_SYS_PRODUCT" | grep -q "esxi"; then
+                    if echo "$DMI_SYS_PRODUCT" | grep "esxi" >/dev/null 2>&1; then
                         VIRT_TYPE="VMware vSphere (ESXi)"
                     else
                         VIRT_TYPE="VMware"
@@ -400,6 +443,7 @@ detect_virtualization() {
         # Check systemd-detect-virt if available
         logD "Checking systemd-detect-virt"
         if command -v systemd-detect-virt >/dev/null 2>&1; then
+            run_debug_cmd "systemd-detect-virt" "systemd-detect-virt"
             DETECTED_VIRT=$(systemd-detect-virt 2>/dev/null)
             logD "systemd-detect-virt result: ${DETECTED_VIRT}"
             if [ "$?" -eq 0 ] && [ "$DETECTED_VIRT" != "none" ]; then
@@ -419,7 +463,7 @@ detect_virtualization() {
         # Check for z/VM (IBM mainframe)
         logD "Checking for z/VM"
         if [ -f /proc/sysinfo ]; then
-            if grep -q "z/VM" /proc/sysinfo 2>/dev/null; then
+            if grep "z/VM" /proc/sysinfo >/dev/null 2>&1; then
                 IS_VIRTUALIZED="yes"
                 VIRT_TYPE="z/VM"
                 logD "z/VM detected in /proc/sysinfo"
@@ -475,27 +519,32 @@ detect_processor() {
         # AIX - Use prtconf or lsattr to get processor info
         logD "Detecting AIX processor information"
         if command -v prtconf >/dev/null 2>&1; then
-            PROC_INFO=$(prtconf | grep -i "processor\|cpu" | head -5)
+            run_debug_cmd "prtconf" "prtconf"
+            PROC_INFO=$(prtconf | grep -i "processor\|system model" | head -10)
             logD "prtconf processor info: ${PROC_INFO}"
             
+            # Look for Processor Type line (e.g., "Processor Type: PowerPC_POWER8")
+            PROC_TYPE=$(prtconf | grep "Processor Type:" | cut -d':' -f2 | sed 's/^[ \t]*//')
+            logD "Processor Type from prtconf: ${PROC_TYPE}"
+            
             # IBM Power processors
-            if echo "$PROC_INFO" | grep -qi "power"; then
+            if echo "$PROC_TYPE" | grep -i "power"; then
                 PROCESSOR_VENDOR="IBM"
-                if echo "$PROC_INFO" | grep -qi "power10"; then
+                if echo "$PROC_TYPE" | grep -i "power10"; then
                     PROCESSOR_BRAND="POWER10"
-                elif echo "$PROC_INFO" | grep -qi "power9"; then
+                elif echo "$PROC_TYPE" | grep -i "power9"; then
                     PROCESSOR_BRAND="POWER9"
-                elif echo "$PROC_INFO" | grep -qi "power8"; then
+                elif echo "$PROC_TYPE" | grep -i "power8"; then
                     PROCESSOR_BRAND="POWER8"
-                elif echo "$PROC_INFO" | grep -qi "power7"; then
+                elif echo "$PROC_TYPE" | grep -i "power7"; then
                     PROCESSOR_BRAND="POWER7"
-                elif echo "$PROC_INFO" | grep -qi "power6"; then
+                elif echo "$PROC_TYPE" | grep -i "power6"; then
                     PROCESSOR_BRAND="POWER6"
-                elif echo "$PROC_INFO" | grep -qi "power5"; then
+                elif echo "$PROC_TYPE" | grep -i "power5"; then
                     PROCESSOR_BRAND="POWER5"
-                elif echo "$PROC_INFO" | grep -qi "power4"; then
+                elif echo "$PROC_TYPE" | grep -i "power4"; then
                     PROCESSOR_BRAND="POWER4"
-                elif echo "$PROC_INFO" | grep -qi "power3"; then
+                elif echo "$PROC_TYPE" | grep -i "power3"; then
                     PROCESSOR_BRAND="POWER3"
                 else
                     PROCESSOR_BRAND="POWER"
@@ -508,54 +557,78 @@ detect_processor() {
         # Solaris - Use psrinfo or isainfo
         logD "Detecting Solaris processor information"
         if command -v psrinfo >/dev/null 2>&1; then
+            # Try psrinfo -pv first for detailed processor info
+            run_debug_cmd "psrinfo -pv" "psrinfo-pv"
+            run_debug_cmd "psrinfo -v" "psrinfo-v"
+            run_debug_cmd "psrinfo" "psrinfo"
+            
             PROC_INFO=$(psrinfo -pv 2>/dev/null | head -10)
+            if [ -z "$PROC_INFO" ]; then
+                # Fallback to psrinfo -v for older Solaris versions
+                PROC_INFO=$(psrinfo -v 2>/dev/null | head -10)
+            fi
             logD "psrinfo processor info: ${PROC_INFO}"
             
-            if echo "$PROC_INFO" | grep -qi "sparc"; then
-                PROCESSOR_VENDOR="Oracle"
-                # Try to determine specific SPARC type
-                if echo "$PROC_INFO" | grep -qi "sparc.*m8"; then
+            # Check for SPARC processors
+            if echo "$PROC_INFO" | grep -i "sparc" >/dev/null 2>&1; then
+                # Determine if it's Oracle or Fujitsu SPARC
+                if echo "$PROC_INFO" | grep -i "sparc.*m8" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC M8"
-                elif echo "$PROC_INFO" | grep -qi "sparc.*m7"; then
+                elif echo "$PROC_INFO" | grep -i "sparc.*m7" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC M7"
-                elif echo "$PROC_INFO" | grep -qi "sparc.*m6"; then
+                elif echo "$PROC_INFO" | grep -i "sparc.*m6" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC M6"
-                elif echo "$PROC_INFO" | grep -qi "sparc.*m5"; then
+                elif echo "$PROC_INFO" | grep -i "sparc.*m5" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC M5"
-                elif echo "$PROC_INFO" | grep -qi "sparc.*t5"; then
+                elif echo "$PROC_INFO" | grep -i "sparc.*t5" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC T5"
-                elif echo "$PROC_INFO" | grep -qi "sparc.*t4"; then
+                elif echo "$PROC_INFO" | grep -i "sparc.*t4" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC T4"
-                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*t3\|niagara.*3"; then
+                elif echo "$PROC_INFO" | grep -i "ultrasparc.*t3\|niagara.*3" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="UltraSPARC T3 (Niagara 3)"
-                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*t2\|niagara.*2"; then
+                elif echo "$PROC_INFO" | grep -i "ultrasparc.*t2\|niagara.*2" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="UltraSPARC T2 (Niagara 2)"
-                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*t1\|niagara.*1"; then
+                elif echo "$PROC_INFO" | grep -i "ultrasparc.*t1\|niagara.*1" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="UltraSPARC T1 (Niagara 1)"
-                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*iv"; then
+                elif echo "$PROC_INFO" | grep -i "ultrasparc.*iv" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="UltraSPARC IV"
-                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*iii"; then
+                elif echo "$PROC_INFO" | grep -i "ultrasparc.*iii" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Oracle"
+                    PROCESSOR_BRAND="UltraSPARC III"
+                elif echo "$PROC_INFO" | grep -i "sparc64.*xii" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Fujitsu"
+                    PROCESSOR_BRAND="SPARC64 XII"
+                elif echo "$PROC_INFO" | grep -i "sparc64.*x" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Fujitsu"
+                    PROCESSOR_BRAND="SPARC64 X/X+"
+                elif echo "$PROC_INFO" | grep -i "sparc64.*vii" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Fujitsu"
+                    PROCESSOR_BRAND="SPARC64 VII"
+                elif echo "$PROC_INFO" | grep -i "sparc64.*vi" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Fujitsu"
+                    PROCESSOR_BRAND="SPARC64 VI"
+                elif echo "$PROC_INFO" | grep -i "sparc64.*v" >/dev/null 2>&1; then
+                    PROCESSOR_VENDOR="Fujitsu"
+                    PROCESSOR_BRAND="SPARC64 V"
+                elif echo "$PROC_INFO" | grep -i "sparcv9" >/dev/null 2>&1; then
+                    # Generic SPARC v9 - could be UltraSPARC III or IV
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="UltraSPARC III"
                 else
+                    PROCESSOR_VENDOR="Oracle"
                     PROCESSOR_BRAND="SPARC"
                 fi
-                logD "Oracle SPARC processor detected: ${PROCESSOR_BRAND}"
-            elif echo "$PROC_INFO" | grep -qi "sparc64"; then
-                PROCESSOR_VENDOR="Fujitsu"
-                if echo "$PROC_INFO" | grep -qi "sparc64.*xii"; then
-                    PROCESSOR_BRAND="SPARC64 XII"
-                elif echo "$PROC_INFO" | grep -qi "sparc64.*x"; then
-                    PROCESSOR_BRAND="SPARC64 X/X+"
-                elif echo "$PROC_INFO" | grep -qi "sparc64.*vii"; then
-                    PROCESSOR_BRAND="SPARC64 VII"
-                elif echo "$PROC_INFO" | grep -qi "sparc64.*vi"; then
-                    PROCESSOR_BRAND="SPARC64 VI"
-                elif echo "$PROC_INFO" | grep -qi "sparc64.*v"; then
-                    PROCESSOR_BRAND="SPARC64 V"
-                else
-                    PROCESSOR_BRAND="SPARC64"
-                fi
-                logD "Fujitsu SPARC64 processor detected: ${PROCESSOR_BRAND}"
+                logD "SPARC processor detected: ${PROCESSOR_VENDOR} ${PROCESSOR_BRAND}"
             fi
         fi
         
@@ -684,7 +757,7 @@ check_processor_eligibility() {
         logD "Checking: vendor='${vendor}' brand='${brand}' against '${PROCESSOR_VENDOR}' '${PROCESSOR_BRAND}'"
         
         # Compare vendor and brand (case insensitive)
-        if echo "$vendor" | grep -qi "^${PROCESSOR_VENDOR}$" && echo "$brand" | grep -qi "^${PROCESSOR_BRAND}"; then
+        if echo "$vendor" | grep "^${PROCESSOR_VENDOR}$" >/dev/null 2>&1 && echo "$brand" | grep "^${PROCESSOR_BRAND}" >/dev/null 2>&1; then
             PROCESSOR_ELIGIBLE="true"
             logD "Processor eligibility match found: ${vendor} ${brand}"
             break
@@ -796,35 +869,37 @@ check_os_virt_eligibility() {
         [ "$virt_vendor" = "virtualization-vendor" ] && continue
         
         # Check OS eligibility
-        if echo "$eligible_os" | grep -qi "$normalized_os_name"; then
+        if echo "$eligible_os" | grep "$normalized_os_name" >/dev/null 2>&1; then
             # Further check version if needed
             local version_match="true"
             case "$normalized_os_name" in
                 "AIX")
                     # Check if detected version meets minimum requirements
-                    if echo "$eligible_os" | grep -q "AIX.*[0-9]"; then
+                    if echo "$eligible_os" | grep "AIX.*[0-9]" >/dev/null 2>&1; then
                         local required_version=$(echo "$eligible_os" | sed 's/.*AIX \([0-9.]*\).*/\1/')
                         logD "AIX version check: detected=${OS_VERSION}, required=${required_version}"
                         # Simple version comparison for AIX (e.g., 7.2 >= 7.1)
                         if [ -n "$required_version" ]; then
-                            # Convert versions to numbers for comparison (e.g., 7.2 -> 72, 6.1 -> 61)
-                            local detected_num=$(echo "$OS_VERSION" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/')
-                            local required_num=$(echo "$required_version" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/')
+                            # Convert versions to numbers for comparison (e.g., 7.200 -> 720, 6.100 -> 610)
+                            local detected_num=$(echo "$OS_VERSION" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
+                            local required_num=$(echo "$required_version" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
                             if [ "$detected_num" -lt "$required_num" ] 2>/dev/null; then
                                 version_match="false"
+                                logD "AIX version ${OS_VERSION} does not meet requirement ${required_version}"
                             fi
                         fi
                     fi
                     ;;
                 "Red Hat Enterprise Linux")
                     # Check RHEL version
-                    if echo "$eligible_os" | grep -q "Red Hat Enterprise Linux.*[0-9]"; then
+                    if echo "$eligible_os" | grep "Red Hat Enterprise Linux.*[0-9]" >/dev/null 2>&1; then
                         local required_version=$(echo "$eligible_os" | sed 's/.*Red Hat Enterprise Linux \([0-9]*\).*/\1/')
                         logD "RHEL version check: detected=${OS_VERSION}, required=${required_version}"
                         if [ -n "$required_version" ]; then
                             local detected_major=$(echo "$OS_VERSION" | cut -d'.' -f1)
                             if [ "$detected_major" -lt "$required_version" ] 2>/dev/null; then
                                 version_match="false"
+                                logD "RHEL version ${OS_VERSION} does not meet requirement ${required_version}"
                             fi
                         fi
                     fi
@@ -839,7 +914,7 @@ check_os_virt_eligibility() {
         
         # Check virtualization eligibility (only if virtualized)
         if [ "$IS_VIRTUALIZED" = "yes" ] && [ "$normalized_virt_type" != "none" ]; then
-            if echo "$virt_tech" | grep -qi "$normalized_virt_type"; then
+            if echo "$virt_tech" | grep "$normalized_virt_type" >/dev/null 2>&1; then
                 VIRT_ELIGIBLE="true"
                 logD "Virtualization eligibility match found: ${virt_tech}"
             fi
@@ -858,13 +933,16 @@ check_os_virt_eligibility() {
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 [output_file]"
+    echo "Usage: $0 [output_directory]"
     echo ""
     echo "Arguments:"
-    echo "  output_file   Path to CSV output file (default: ./inspect_output.csv)"
+    echo "  output_directory  Path to output directory (default: ./detection-output)"
     echo ""
-    echo "This script detects system information and outputs it in CSV format with columns:"
-    echo "  Parameter, Value"
+    echo "This script creates a timestamped subdirectory within the output directory"
+    echo "and generates the following files:"
+    echo "  - inspect_output.csv: Main detection results in CSV format"
+    echo "  - session.log: Detailed logging of the detection session"
+    echo "  - [command].out/.err: Command outputs when INSPECT_DEBUG=ON"
     echo ""
     echo "Output parameters include:"
     echo "  - detection_timestamp: ISO 8601 timestamp"
@@ -878,7 +956,7 @@ show_usage() {
     echo "  - VIRT_ELIGIBLE: true/false if virtualization is IBM-eligible"
     echo ""
     echo "Environment variables:"
-    echo "  INSPECT_DEBUG=ON   Enable debug logging to stderr"
+    echo "  INSPECT_DEBUG=ON   Enable debug logging and command output capture"
     echo ""
     echo "Supported platforms:"
     echo "  - AIX (PowerVM detection)"
@@ -896,22 +974,48 @@ main() {
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     logD "Script directory: ${SCRIPT_DIR}"
     
-    # Set output file - use first argument or default
+    # Set output directory - use first argument or default
     if [ -n "$1" ]; then
         if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
             show_usage
             exit 0
         fi
-        OUTPUT_FILE="$1"
+        OUTPUT_DIR="$1"
     else
-        OUTPUT_FILE="./inspect_output.csv"
+        OUTPUT_DIR="./detection-output"
     fi
     
-    log "Starting system detection, output file: ${OUTPUT_FILE}"
+    # Create timestamped session directory
+    TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
+    SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}"
+    
+    # Create directories if they don't exist
+    mkdir -p "$SESSION_DIR" || {
+        echo "Error: Cannot create session directory: $SESSION_DIR" >&2
+        exit 1
+    }
+    
+    # Set output file and session log
+    OUTPUT_FILE="${SESSION_DIR}/inspect_output.csv"
+    SESSION_LOG="${SESSION_DIR}/session.log"
+    
+    # Initialize session log
+    echo "=== System Detection Session Started ===" > "$SESSION_LOG"
+    echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
+    echo "Session Directory: $SESSION_DIR" >> "$SESSION_LOG"
+    echo "Debug Mode: ${INSPECT_DEBUG:-OFF}" >> "$SESSION_LOG"
+    echo "=========================================" >> "$SESSION_LOG"
+    echo "" >> "$SESSION_LOG"
+    
+    log "Starting system detection"
+    log "Session directory: ${SESSION_DIR}"
+    log "Output file: ${OUTPUT_FILE}"
+    log "Session log: ${SESSION_LOG}"
     
     # Create CSV file with header
     echo "Parameter,Value" > "$OUTPUT_FILE"
     write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    write_csv "session_directory" "$SESSION_DIR"
     
     # Detect system information
     detect_os
@@ -924,6 +1028,13 @@ main() {
     check_os_virt_eligibility
     
     log "Detection complete. Results written to: ${OUTPUT_FILE}"
+    log "Session log available at: ${SESSION_LOG}"
+    
+    # Final session log entry
+    echo "" >> "$SESSION_LOG"
+    echo "=== System Detection Session Completed ===" >> "$SESSION_LOG"
+    echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
+    echo "==========================================" >> "$SESSION_LOG"
 }
 
 # Execute main function with all arguments
