@@ -263,10 +263,10 @@ detect_cpu_count() {
         # Solaris
         logD "Using Solaris CPU detection methods"
         if command -v psrinfo >/dev/null 2>&1; then
-            CPU_COUNT=$(psrinfo | wc -l)
+            CPU_COUNT=$(psrinfo | wc -l | sed 's/^[[:space:]]*//')
             logD "psrinfo method: CPU_COUNT=${CPU_COUNT}"
         else
-            CPU_COUNT=$(kstat -m cpu_info | grep "module:" | wc -l)
+            CPU_COUNT=$(kstat -m cpu_info | grep "module:" | wc -l | sed 's/^[[:space:]]*//')
             logD "kstat method: CPU_COUNT=${CPU_COUNT}"
         fi
     elif [ -f /proc/cpuinfo ]; then
@@ -338,7 +338,7 @@ detect_host_physical_cpus() {
             # For Solaris, use various methods to detect host CPUs
             if command -v psrinfo >/dev/null 2>&1; then
                 # Physical CPU count
-                host_cpus=$(psrinfo -p 2>/dev/null || echo "")
+                host_cpus=$(psrinfo -p 2>/dev/null | sed 's/^[[:space:]]*//' || echo "")
                 if [ -n "$host_cpus" ]; then
                     logD "Found physical CPUs from psrinfo -p: ${host_cpus}"
                 fi
