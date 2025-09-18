@@ -1009,9 +1009,23 @@ check_os_virt_eligibility() {
                             local required_version=$(echo "$eligible_os" | sed 's/.*AIX \([0-9.]*\).*/\1/')
                             logD "AIX virtualization version check: detected=${OS_VERSION}, required=${required_version}, eligible_os=${eligible_os}"
                             if [ -n "$required_version" ]; then
-                                # Convert versions to numbers for comparison (e.g., 7.200 -> 720, 6.100 -> 610)
-                                local detected_num=$(echo "$OS_VERSION" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
-                                local required_num=$(echo "$required_version" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
+                                # Normalize versions to major.minor format for comparison
+                                # Convert X.Y.Z to XY format, handling missing minor parts
+                                local detected_major=$(echo "$OS_VERSION" | cut -d'.' -f1)
+                                local detected_minor=$(echo "$OS_VERSION" | cut -d'.' -f2 | sed 's/^0*//' | head -c1)
+                                local required_major=$(echo "$required_version" | cut -d'.' -f1)
+                                local required_minor=$(echo "$required_version" | cut -d'.' -f2 | sed 's/^0*//' | head -c1)
+                                
+                                # Handle empty minor versions
+                                [ -z "$detected_minor" ] && detected_minor="0"
+                                [ -z "$required_minor" ] && required_minor="0"
+                                
+                                # Create comparable version numbers (e.g., 6.1 -> 61, 7.1 -> 71)
+                                local detected_num="${detected_major}${detected_minor}"
+                                local required_num="${required_major}${required_minor}"
+                                
+                                logD "Version comparison: detected=${detected_major}.${detected_minor} (${detected_num}) vs required=${required_major}.${required_minor} (${required_num})"
+                                
                                 if [ "$detected_num" -lt "$required_num" ] 2>/dev/null; then
                                     version_match="false"
                                     logD "AIX version ${OS_VERSION} (${detected_num}) does not meet virtualization requirement ${required_version} (${required_num})"
