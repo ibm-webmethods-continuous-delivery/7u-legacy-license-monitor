@@ -862,68 +862,105 @@ check_os_virt_eligibility() {
     
     logD "Normalized OS: '${normalized_os_name}', Normalized Virt: '${normalized_virt_type}'"
     
-    # Read CSV file and check for matches
-    while IFS=',' read -r virt_vendor virt_tech eligible_os sub_cap_form ilmt_version || [ -n "$virt_vendor" ]; do
-        # Skip empty lines and header
-        [ -z "$virt_vendor" ] && continue
-        [ "$virt_vendor" = "virtualization-vendor" ] && continue
-        
-        # Check OS eligibility
-        if echo "$eligible_os" | grep "$normalized_os_name" >/dev/null 2>&1; then
-            # Further check version if needed
-            local version_match="true"
-            case "$normalized_os_name" in
-                "AIX")
-                    # Check if detected version meets minimum requirements
-                    if echo "$eligible_os" | grep "AIX.*[0-9]" >/dev/null 2>&1; then
-                        local required_version=$(echo "$eligible_os" | sed 's/.*AIX \([0-9.]*\).*/\1/')
-                        logD "AIX version check: detected=${OS_VERSION}, required=${required_version}"
-                        # Simple version comparison for AIX (e.g., 7.2 >= 7.1)
-                        if [ -n "$required_version" ]; then
-                            # Convert versions to numbers for comparison (e.g., 7.200 -> 720, 6.100 -> 610)
-                            local detected_num=$(echo "$OS_VERSION" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
-                            local required_num=$(echo "$required_version" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
-                            if [ "$detected_num" -lt "$required_num" ] 2>/dev/null; then
-                                version_match="false"
-                                logD "AIX version ${OS_VERSION} does not meet requirement ${required_version}"
-                            fi
-                        fi
-                    fi
-                    ;;
-                "Red Hat Enterprise Linux")
-                    # Check RHEL version
-                    if echo "$eligible_os" | grep "Red Hat Enterprise Linux.*[0-9]" >/dev/null 2>&1; then
-                        local required_version=$(echo "$eligible_os" | sed 's/.*Red Hat Enterprise Linux \([0-9]*\).*/\1/')
-                        logD "RHEL version check: detected=${OS_VERSION}, required=${required_version}"
-                        if [ -n "$required_version" ]; then
-                            local detected_major=$(echo "$OS_VERSION" | cut -d'.' -f1)
-                            if [ "$detected_major" -lt "$required_version" ] 2>/dev/null; then
-                                version_match="false"
-                                logD "RHEL version ${OS_VERSION} does not meet requirement ${required_version}"
-                            fi
-                        fi
-                    fi
-                    ;;
-            esac
-            
-            if [ "$version_match" = "true" ]; then
+    # For physical systems, determine OS eligibility based on known IBM-supported OS types
+    # regardless of version (the CSV only contains virtualization-specific constraints)
+    if [ "$IS_VIRTUALIZED" = "no" ]; then
+        case "$normalized_os_name" in
+            "AIX"|"Solaris"|"Red Hat Enterprise Linux"|"SUSE Linux Enterprise Server"|"IBM i")
                 OS_ELIGIBLE="true"
-                logD "OS eligibility match found: ${eligible_os}"
+                VIRT_ELIGIBLE="false"  # Physical systems have no virtualization, so not virt eligible
+                logD "Physical system with IBM-supported OS (${normalized_os_name}) - OS eligible, no virtualization"
+                ;;
+            *)
+                logD "Physical system with unsupported OS (${normalized_os_name}) - not eligible"
+                ;;
+        esac
+    else
+        # For virtualized systems, check against CSV for version-specific requirements
+        local found_virt_match="false"
+        while IFS=',' read -r virt_vendor virt_tech eligible_os sub_cap_form ilmt_version || [ -n "$virt_vendor" ]; do
+            # Skip empty lines and header
+            [ -z "$virt_vendor" ] && continue
+            [ "$virt_vendor" = "virtualization-vendor" ] && continue
+            
+            # Check if this CSV entry matches our OS and meets version requirements
+            local os_virt_match="false"
+            if echo "$eligible_os" | grep "$normalized_os_name" >/dev/null 2>&1; then
+                # Check if version requirements are met for virtualized systems
+                local version_match="true"
+                case "$normalized_os_name" in
+                    "AIX")
+                        # Extract version requirement from eligible_os (e.g., "AIX 7.1" -> "7.1")
+                        if echo "$eligible_os" | grep "AIX.*[0-9]" >/dev/null 2>&1; then
+                            local required_version=$(echo "$eligible_os" | sed 's/.*AIX \([0-9.]*\).*/\1/')
+                            logD "AIX virtualization version check: detected=${OS_VERSION}, required=${required_version}, eligible_os=${eligible_os}"
+                            if [ -n "$required_version" ]; then
+                                # Convert versions to numbers for comparison (e.g., 7.200 -> 720, 6.100 -> 610)
+                                local detected_num=$(echo "$OS_VERSION" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
+                                local required_num=$(echo "$required_version" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/' | sed 's/^0*//')
+                                if [ "$detected_num" -lt "$required_num" ] 2>/dev/null; then
+                                    version_match="false"
+                                    logD "AIX version ${OS_VERSION} (${detected_num}) does not meet virtualization requirement ${required_version} (${required_num})"
+                                else
+                                    logD "AIX version ${OS_VERSION} (${detected_num}) meets virtualization requirement ${required_version} (${required_num})"
+                                fi
+                            fi
+                        fi
+                        ;;
+                    "Solaris")
+                        # Extract version requirement from eligible_os (e.g., "Solaris 11" -> "11")
+                        if echo "$eligible_os" | grep "Solaris.*[0-9]" >/dev/null 2>&1; then
+                            local required_version=$(echo "$eligible_os" | sed 's/.*Solaris \([0-9]*\).*/\1/')
+                            logD "Solaris virtualization version check: detected=${OS_VERSION}, required=${required_version}, eligible_os=${eligible_os}"
+                            if [ -n "$required_version" ]; then
+                                local detected_num=$(echo "$OS_VERSION" | sed 's/^0*//')
+                                local required_num=$(echo "$required_version" | sed 's/^0*//')
+                                if [ "$detected_num" -lt "$required_num" ] 2>/dev/null; then
+                                    version_match="false"
+                                    logD "Solaris version ${OS_VERSION} (${detected_num}) does not meet virtualization requirement ${required_version} (${required_num})"
+                                else
+                                    logD "Solaris version ${OS_VERSION} (${detected_num}) meets virtualization requirement ${required_version} (${required_num})"
+                                fi
+                            fi
+                        fi
+                        ;;
+                    "Red Hat Enterprise Linux")
+                        # Extract version requirement from eligible_os
+                        if echo "$eligible_os" | grep "Red Hat Enterprise Linux.*[0-9]" >/dev/null 2>&1; then
+                            local required_version=$(echo "$eligible_os" | sed 's/.*Red Hat Enterprise Linux \([0-9]*\).*/\1/')
+                            logD "RHEL virtualization version check: detected=${OS_VERSION}, required=${required_version}, eligible_os=${eligible_os}"
+                            if [ -n "$required_version" ]; then
+                                local detected_major=$(echo "$OS_VERSION" | cut -d'.' -f1)
+                                if [ "$detected_major" -lt "$required_version" ] 2>/dev/null; then
+                                    version_match="false"
+                                    logD "RHEL version ${OS_VERSION} does not meet virtualization requirement ${required_version}"
+                                else
+                                    logD "RHEL version ${OS_VERSION} meets virtualization requirement ${required_version}"
+                                fi
+                            fi
+                        fi
+                        ;;
+                    *)
+                        # For other OS types, simple name match is sufficient
+                        logD "OS ${normalized_os_name} - simple name match for virtualization, eligible_os=${eligible_os}"
+                        ;;
+                esac
+                
+                if [ "$version_match" = "true" ]; then
+                    os_virt_match="true"
+                    OS_ELIGIBLE="true"
+                    logD "OS virtualization eligibility match found: ${eligible_os}"
+                    
+                    # Check if this specific virtualization technology matches
+                    if echo "$virt_tech" | grep "$normalized_virt_type" >/dev/null 2>&1; then
+                        VIRT_ELIGIBLE="true"
+                        found_virt_match="true"
+                        logD "Virtualization technology match found: ${virt_tech} for OS ${eligible_os}"
+                    fi
+                fi
             fi
-        fi
-        
-        # Check virtualization eligibility (only if virtualized)
-        if [ "$IS_VIRTUALIZED" = "yes" ] && [ "$normalized_virt_type" != "none" ]; then
-            if echo "$virt_tech" | grep "$normalized_virt_type" >/dev/null 2>&1; then
-                VIRT_ELIGIBLE="true"
-                logD "Virtualization eligibility match found: ${virt_tech}"
-            fi
-        elif [ "$IS_VIRTUALIZED" = "no" ]; then
-            # Non-virtualized systems are considered "eligible" for virtualization purposes
-            VIRT_ELIGIBLE="true"
-            logD "Non-virtualized system - virtualization eligibility set to true"
-        fi
-    done < "$virt_os_csv"
+        done < "$virt_os_csv"
+    fi
     
     log "OS eligibility check complete: ${OS_ELIGIBLE}"
     log "Virtualization eligibility check complete: ${VIRT_ELIGIBLE}"
