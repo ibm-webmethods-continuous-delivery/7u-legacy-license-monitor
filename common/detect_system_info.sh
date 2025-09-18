@@ -30,6 +30,9 @@ PROCESSOR_BRAND=""
 PROCESSOR_ELIGIBLE="false"
 OS_ELIGIBLE="false"
 VIRT_ELIGIBLE="false"
+CONSIDERED_CPUS=""
+HOST_PHYSICAL_CPUS=""
+PARTITION_CPUS=""
 
 # Global variable for output file
 OUTPUT_FILE=""
@@ -284,6 +287,111 @@ detect_cpu_count() {
     
     log "CPU count detected: ${CPU_COUNT}"
     write_csv "CPU_COUNT" "$CPU_COUNT"
+}
+
+# Function to detect host/physical CPU information for licensing calculations
+detect_host_physical_cpus() {
+    local host_cpus=""
+    local partition_cpus=""
+    
+    logD "Detecting host/physical CPU information"
+    
+    case "$OS_NAME" in
+        "AIX")
+            # For AIX, try to get physical host CPU information
+            if command -v lparstat >/dev/null 2>&1; then
+                # Get physical CPU information from lparstat
+                local lparstat_output
+                lparstat_output=$(lparstat -i 2>/dev/null || echo "")
+                logD "lparstat output for CPU detection: ${lparstat_output}"
+                
+                # Try to extract physical CPU count from various lparstat fields
+                # Look for "Physical CPU in system" or similar
+                if echo "$lparstat_output" | grep -i "Physical CPU" >/dev/null 2>&1; then
+                    host_cpus=$(echo "$lparstat_output" | grep -i "Physical CPU" | sed 's/.*: *\([0-9]*\).*/\1/' | head -1)
+                    logD "Found physical CPUs from lparstat: ${host_cpus}"
+                fi
+                
+                # Try to get partition-specific CPU allocation
+                if echo "$lparstat_output" | grep -i "Maximum Physical CPU" >/dev/null 2>&1; then
+                    partition_cpus=$(echo "$lparstat_output" | grep -i "Maximum Physical CPU" | sed 's/.*: *\([0-9]*\).*/\1/' | head -1)
+                    logD "Found partition max CPUs from lparstat: ${partition_cpus}"
+                elif echo "$lparstat_output" | grep -i "Online Physical CPU" >/dev/null 2>&1; then
+                    partition_cpus=$(echo "$lparstat_output" | grep -i "Online Physical CPU" | sed 's/.*: *\([0-9]*\).*/\1/' | head -1)
+                    logD "Found partition online CPUs from lparstat: ${partition_cpus}"
+                fi
+            fi
+            
+            # Try alternative AIX methods if lparstat doesn't provide info
+            if [ -z "$host_cpus" ] && command -v prtconf >/dev/null 2>&1; then
+                # Try to get CPU info from prtconf
+                local prtconf_output
+                prtconf_output=$(prtconf 2>/dev/null | grep -i "Number Of Processors" || echo "")
+                if [ -n "$prtconf_output" ]; then
+                    host_cpus=$(echo "$prtconf_output" | sed 's/.*: *\([0-9]*\).*/\1/')
+                    logD "Found host CPUs from prtconf: ${host_cpus}"
+                fi
+            fi
+            ;;
+            
+        "SunOS")
+            # For Solaris, use various methods to detect host CPUs
+            if command -v psrinfo >/dev/null 2>&1; then
+                # Physical CPU count
+                host_cpus=$(psrinfo -p 2>/dev/null || echo "")
+                if [ -n "$host_cpus" ]; then
+                    logD "Found physical CPUs from psrinfo -p: ${host_cpus}"
+                fi
+                
+                # If in a zone, try to detect host physical CPUs
+                if [ "$IS_VIRTUALIZED" = "yes" ] && command -v zonename >/dev/null 2>&1; then
+                    local zone_name=$(zonename 2>/dev/null)
+                    if [ "$zone_name" != "global" ]; then
+                        # In a non-global zone - virtual CPU count is what we have, 
+                        # but we need host physical for comparison
+                        # This is challenging from within a zone, so we'll use what we can detect
+                        logD "In non-global zone (${zone_name}), host CPU detection limited"
+                    fi
+                fi
+            fi
+            ;;
+            
+        "Red Hat Enterprise Linux"|"SUSE Linux Enterprise Server"|*Linux*)
+            # For Linux, try to get physical CPU information
+            if [ -f /proc/cpuinfo ]; then
+                # Get physical CPU count (not logical cores)
+                local physical_cpus=$(grep "physical id" /proc/cpuinfo | sort -u | wc -l 2>/dev/null || echo "")
+                if [ -n "$physical_cpus" ] && [ "$physical_cpus" -gt 0 ]; then
+                    host_cpus="$physical_cpus"
+                    logD "Found physical CPUs from /proc/cpuinfo: ${host_cpus}"
+                fi
+                
+                # For virtualized environments, try to detect host information
+                if [ "$IS_VIRTUALIZED" = "yes" ]; then
+                    # This is challenging from within a VM, but we can try some approaches
+                    case "$VIRT_TYPE" in
+                        "KVM"|"VMware"|"Xen"|"Hyper-V")
+                            # For these, the virtual CPU count is typically what we should use
+                            # Host CPU detection from within VM is not reliable
+                            logD "In virtualized environment (${VIRT_TYPE}), host CPU detection limited from within VM"
+                            ;;
+                    esac
+                fi
+            fi
+            ;;
+    esac
+    
+    # Store the results
+    logD "Host CPUs detected: ${host_cpus:-unknown}"
+    logD "Partition CPUs detected: ${partition_cpus:-unknown}"
+    
+    # Return values via global variables for use in considered CPU calculation
+    HOST_PHYSICAL_CPUS="$host_cpus"
+    PARTITION_CPUS="$partition_cpus"
+    
+    # Write to CSV
+    write_csv "HOST_PHYSICAL_CPUS" "${HOST_PHYSICAL_CPUS:-unknown}"
+    write_csv "PARTITION_CPUS" "${PARTITION_CPUS:-unknown}"
 }
 
 # Function to detect virtualization
@@ -821,14 +929,20 @@ check_os_virt_eligibility() {
             ;;
     esac
     
-    # Normalize virtualization type for comparison
+    # Normalize virtualization type for comparison with CSV
     local normalized_virt_type=""
     case "$VIRT_TYPE" in
         "PowerVM - Micro-Partitioning")
-            normalized_virt_type="PowerVM - Micro-Partitioning"
+            # Map micro-partitioning to DLPAR for CSV matching
+            normalized_virt_type="PowerVM - DLPAR"
             ;;
         "PowerVM - LPAR")
-            normalized_virt_type="PowerVM - LPAR"
+            # Regular LPARs also map to DLPAR
+            normalized_virt_type="PowerVM - DLPAR"
+            ;;
+        "PowerVM"|"LPAR")
+            # Generic PowerVM detection maps to DLPAR
+            normalized_virt_type="PowerVM - DLPAR"
             ;;
         "KVM hypervisor")
             normalized_virt_type="KVM hypervisor standalone"
@@ -968,6 +1082,82 @@ check_os_virt_eligibility() {
     write_csv "VIRT_ELIGIBLE" "$VIRT_ELIGIBLE"
 }
 
+# Function to calculate considered CPUs for IBM licensing
+calculate_considered_cpus() {
+    logD "Calculating considered CPUs for IBM licensing"
+    
+    # Start with the detected virtual/logical CPU count
+    local virtual_cpus="$CPU_COUNT"
+    local considered_cpus="$virtual_cpus"
+    
+    logD "Starting calculation - Virtual CPUs: ${virtual_cpus}"
+    logD "OS_ELIGIBLE: ${OS_ELIGIBLE}, VIRT_ELIGIBLE: ${VIRT_ELIGIBLE}"
+    logD "IS_VIRTUALIZED: ${IS_VIRTUALIZED}, VIRT_TYPE: ${VIRT_TYPE}"
+    logD "Host Physical CPUs: ${HOST_PHYSICAL_CPUS:-unknown}"
+    logD "Partition CPUs: ${PARTITION_CPUS:-unknown}"
+    
+    if [ "$IS_VIRTUALIZED" = "yes" ]; then
+        # We are in a virtualized environment
+        logD "Processing virtualized environment"
+        
+        # Check if both OS and virtualization technology are eligible
+        if [ "$OS_ELIGIBLE" = "true" ] && [ "$VIRT_ELIGIBLE" = "true" ]; then
+            # Both OS and virt tech are eligible - use virtual CPU count
+            considered_cpus="$virtual_cpus"
+            logD "Both OS and virtualization eligible - using virtual CPUs: ${considered_cpus}"
+        else
+            # Either OS or virtualization technology not eligible
+            # Use physical host/partition cores instead
+            logD "OS or virtualization not eligible - need to use physical cores"
+            
+            # Prefer partition CPUs if available, otherwise use host physical CPUs
+            if [ -n "$PARTITION_CPUS" ] && [ "$PARTITION_CPUS" -gt 0 ] 2>/dev/null; then
+                considered_cpus="$PARTITION_CPUS"
+                logD "Using partition CPUs: ${considered_cpus}"
+            elif [ -n "$HOST_PHYSICAL_CPUS" ] && [ "$HOST_PHYSICAL_CPUS" -gt 0 ] 2>/dev/null; then
+                considered_cpus="$HOST_PHYSICAL_CPUS"
+                logD "Using host physical CPUs: ${considered_cpus}"
+            else
+                # Fallback to virtual CPUs if we can't determine physical
+                considered_cpus="$virtual_cpus"
+                logD "Cannot determine physical CPUs - falling back to virtual CPUs: ${considered_cpus}"
+            fi
+        fi
+        
+        # Check for over-provisioning scenario
+        # If physical cores < virtual cores, use physical cores
+        local physical_to_compare=""
+        if [ -n "$PARTITION_CPUS" ] && [ "$PARTITION_CPUS" -gt 0 ] 2>/dev/null; then
+            physical_to_compare="$PARTITION_CPUS"
+        elif [ -n "$HOST_PHYSICAL_CPUS" ] && [ "$HOST_PHYSICAL_CPUS" -gt 0 ] 2>/dev/null; then
+            physical_to_compare="$HOST_PHYSICAL_CPUS"
+        fi
+        
+        if [ -n "$physical_to_compare" ]; then
+            if [ "$physical_to_compare" -lt "$virtual_cpus" ] 2>/dev/null; then
+                logD "Over-provisioning detected: physical (${physical_to_compare}) < virtual (${virtual_cpus})"
+                considered_cpus="$physical_to_compare"
+                logD "Using physical CPUs due to over-provisioning: ${considered_cpus}"
+            fi
+        fi
+        
+    else
+        # Physical system - use the detected CPU count
+        considered_cpus="$virtual_cpus"
+        logD "Physical system - using detected CPUs: ${considered_cpus}"
+    fi
+    
+    # Ensure we have a valid number
+    if ! echo "$considered_cpus" | grep -E '^[0-9]+$' >/dev/null 2>&1; then
+        logD "Invalid considered_cpus value (${considered_cpus}), using virtual_cpus (${virtual_cpus})"
+        considered_cpus="$virtual_cpus"
+    fi
+    
+    CONSIDERED_CPUS="$considered_cpus"
+    log "Considered CPUs for IBM licensing: ${CONSIDERED_CPUS}"
+    write_csv "CONSIDERED_CPUS" "$CONSIDERED_CPUS"
+}
+
 # Function to show usage
 show_usage() {
     echo "Usage: $0 [output_directory]"
@@ -984,7 +1174,10 @@ show_usage() {
     echo "Output parameters include:"
     echo "  - detection_timestamp: ISO 8601 timestamp"
     echo "  - OS_NAME, OS_VERSION: Operating system information"
-    echo "  - CPU_COUNT: Number of available CPUs"
+    echo "  - CPU_COUNT: Number of available CPUs (virtual/logical)"
+    echo "  - HOST_PHYSICAL_CPUS: Number of physical CPUs in host (when detectable)"
+    echo "  - PARTITION_CPUS: Number of CPUs allocated to partition (when applicable)"
+    echo "  - CONSIDERED_CPUS: CPU count for IBM licensing calculations"
     echo "  - IS_VIRTUALIZED: yes/no if running on virtualized platform"
     echo "  - VIRT_TYPE: Type of virtualization technology"
     echo "  - PROCESSOR_VENDOR, PROCESSOR_BRAND: Processor information"
@@ -1060,9 +1253,15 @@ main() {
     detect_virtualization
     detect_processor
     
+    # Detect host/physical CPU information for licensing calculations
+    detect_host_physical_cpus
+    
     # Check eligibility
     check_processor_eligibility
     check_os_virt_eligibility
+    
+    # Calculate considered CPUs based on eligibility and physical constraints
+    calculate_considered_cpus
     
     log "Detection complete. Results written to: ${OUTPUT_FILE}"
     log "Session log available at: ${SESSION_LOG}"
