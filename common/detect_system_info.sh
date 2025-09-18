@@ -25,9 +25,17 @@ OS_VERSION=""
 CPU_COUNT=""
 IS_VIRTUALIZED="no"
 VIRT_TYPE="none"
+PROCESSOR_VENDOR=""
+PROCESSOR_BRAND=""
+PROCESSOR_ELIGIBLE="false"
+OS_ELIGIBLE="false"
+VIRT_ELIGIBLE="false"
 
 # Global variable for output file
 OUTPUT_FILE=""
+
+# Global variable for script directory (to find CSV files)
+SCRIPT_DIR=""
 
 # Function to write a parameter-value pair to CSV
 write_csv() {
@@ -455,6 +463,399 @@ detect_virtualization() {
     write_csv "VIRT_TYPE" "$VIRT_TYPE"
 }
 
+# Function to detect processor information
+detect_processor() {
+    PROCESSOR_VENDOR=""
+    PROCESSOR_BRAND=""
+    os_name=$(uname -s)
+    
+    log "Starting processor detection for ${os_name}"
+    
+    if [ "$os_name" = "AIX" ]; then
+        # AIX - Use prtconf or lsattr to get processor info
+        logD "Detecting AIX processor information"
+        if command -v prtconf >/dev/null 2>&1; then
+            PROC_INFO=$(prtconf | grep -i "processor\|cpu" | head -5)
+            logD "prtconf processor info: ${PROC_INFO}"
+            
+            # IBM Power processors
+            if echo "$PROC_INFO" | grep -qi "power"; then
+                PROCESSOR_VENDOR="IBM"
+                if echo "$PROC_INFO" | grep -qi "power10"; then
+                    PROCESSOR_BRAND="POWER10"
+                elif echo "$PROC_INFO" | grep -qi "power9"; then
+                    PROCESSOR_BRAND="POWER9"
+                elif echo "$PROC_INFO" | grep -qi "power8"; then
+                    PROCESSOR_BRAND="POWER8"
+                elif echo "$PROC_INFO" | grep -qi "power7"; then
+                    PROCESSOR_BRAND="POWER7"
+                elif echo "$PROC_INFO" | grep -qi "power6"; then
+                    PROCESSOR_BRAND="POWER6"
+                elif echo "$PROC_INFO" | grep -qi "power5"; then
+                    PROCESSOR_BRAND="POWER5"
+                elif echo "$PROC_INFO" | grep -qi "power4"; then
+                    PROCESSOR_BRAND="POWER4"
+                elif echo "$PROC_INFO" | grep -qi "power3"; then
+                    PROCESSOR_BRAND="POWER3"
+                else
+                    PROCESSOR_BRAND="POWER"
+                fi
+                logD "IBM Power processor detected: ${PROCESSOR_BRAND}"
+            fi
+        fi
+        
+    elif [ "$os_name" = "SunOS" ]; then
+        # Solaris - Use psrinfo or isainfo
+        logD "Detecting Solaris processor information"
+        if command -v psrinfo >/dev/null 2>&1; then
+            PROC_INFO=$(psrinfo -pv 2>/dev/null | head -10)
+            logD "psrinfo processor info: ${PROC_INFO}"
+            
+            if echo "$PROC_INFO" | grep -qi "sparc"; then
+                PROCESSOR_VENDOR="Oracle"
+                # Try to determine specific SPARC type
+                if echo "$PROC_INFO" | grep -qi "sparc.*m8"; then
+                    PROCESSOR_BRAND="SPARC M8"
+                elif echo "$PROC_INFO" | grep -qi "sparc.*m7"; then
+                    PROCESSOR_BRAND="SPARC M7"
+                elif echo "$PROC_INFO" | grep -qi "sparc.*m6"; then
+                    PROCESSOR_BRAND="SPARC M6"
+                elif echo "$PROC_INFO" | grep -qi "sparc.*m5"; then
+                    PROCESSOR_BRAND="SPARC M5"
+                elif echo "$PROC_INFO" | grep -qi "sparc.*t5"; then
+                    PROCESSOR_BRAND="SPARC T5"
+                elif echo "$PROC_INFO" | grep -qi "sparc.*t4"; then
+                    PROCESSOR_BRAND="SPARC T4"
+                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*t3\|niagara.*3"; then
+                    PROCESSOR_BRAND="UltraSPARC T3 (Niagara 3)"
+                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*t2\|niagara.*2"; then
+                    PROCESSOR_BRAND="UltraSPARC T2 (Niagara 2)"
+                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*t1\|niagara.*1"; then
+                    PROCESSOR_BRAND="UltraSPARC T1 (Niagara 1)"
+                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*iv"; then
+                    PROCESSOR_BRAND="UltraSPARC IV"
+                elif echo "$PROC_INFO" | grep -qi "ultrasparc.*iii"; then
+                    PROCESSOR_BRAND="UltraSPARC III"
+                else
+                    PROCESSOR_BRAND="SPARC"
+                fi
+                logD "Oracle SPARC processor detected: ${PROCESSOR_BRAND}"
+            elif echo "$PROC_INFO" | grep -qi "sparc64"; then
+                PROCESSOR_VENDOR="Fujitsu"
+                if echo "$PROC_INFO" | grep -qi "sparc64.*xii"; then
+                    PROCESSOR_BRAND="SPARC64 XII"
+                elif echo "$PROC_INFO" | grep -qi "sparc64.*x"; then
+                    PROCESSOR_BRAND="SPARC64 X/X+"
+                elif echo "$PROC_INFO" | grep -qi "sparc64.*vii"; then
+                    PROCESSOR_BRAND="SPARC64 VII"
+                elif echo "$PROC_INFO" | grep -qi "sparc64.*vi"; then
+                    PROCESSOR_BRAND="SPARC64 VI"
+                elif echo "$PROC_INFO" | grep -qi "sparc64.*v"; then
+                    PROCESSOR_BRAND="SPARC64 V"
+                else
+                    PROCESSOR_BRAND="SPARC64"
+                fi
+                logD "Fujitsu SPARC64 processor detected: ${PROCESSOR_BRAND}"
+            fi
+        fi
+        
+    elif [ -f /proc/cpuinfo ]; then
+        # Linux systems - Read /proc/cpuinfo
+        logD "Detecting Linux processor information from /proc/cpuinfo"
+        
+        # Get vendor and model info
+        VENDOR_ID=$(grep -m1 "vendor_id" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | sed 's/^[ \t]*//')
+        MODEL_NAME=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | sed 's/^[ \t]*//')
+        CPU_FAMILY=$(grep -m1 "cpu family" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | sed 's/^[ \t]*//')
+        
+        logD "vendor_id: ${VENDOR_ID}"
+        logD "model name: ${MODEL_NAME}"
+        logD "cpu family: ${CPU_FAMILY}"
+        
+        case "$VENDOR_ID" in
+            "GenuineIntel")
+                PROCESSOR_VENDOR="Intel"
+                # Determine Intel processor type from model name
+                if echo "$MODEL_NAME" | grep -qi "xeon"; then
+                    PROCESSOR_BRAND="Xeon - All Processor Numbers"
+                elif echo "$MODEL_NAME" | grep -qi "pentium"; then
+                    PROCESSOR_BRAND="Pentium - All Processor Numbers"
+                elif echo "$MODEL_NAME" | grep -qi "core"; then
+                    PROCESSOR_BRAND="Core - All Processor Numbers"
+                else
+                    # Default to Xeon for unknown Intel processors in server context
+                    PROCESSOR_BRAND="Xeon - All Processor Numbers"
+                fi
+                logD "Intel processor detected: ${PROCESSOR_BRAND}"
+                ;;
+            "AuthenticAMD")
+                PROCESSOR_VENDOR="AMD"
+                if echo "$MODEL_NAME" | grep -qi "epyc"; then
+                    PROCESSOR_BRAND="Epyc"
+                elif echo "$MODEL_NAME" | grep -qi "opteron.*6[0-9][0-9][0-9]"; then
+                    PROCESSOR_BRAND="Opteron 6000 series"
+                elif echo "$MODEL_NAME" | grep -qi "opteron"; then
+                    PROCESSOR_BRAND="Opteron"
+                else
+                    # Default based on CPU family or model name
+                    if [ "$CPU_FAMILY" = "23" ] || [ "$CPU_FAMILY" = "25" ]; then
+                        PROCESSOR_BRAND="Epyc"
+                    else
+                        PROCESSOR_BRAND="Opteron"
+                    fi
+                fi
+                logD "AMD processor detected: ${PROCESSOR_BRAND}"
+                ;;
+            *)
+                # Check for other architectures
+                ARCH=$(uname -m)
+                logD "Architecture: ${ARCH}"
+                case "$ARCH" in
+                    "s390x"|"s390")
+                        PROCESSOR_VENDOR="IBM"
+                        PROCESSOR_BRAND="System z - All IFL or CP engines"
+                        logD "IBM System z detected"
+                        ;;
+                    "ppc64"|"ppc64le"|"ppc")
+                        PROCESSOR_VENDOR="IBM"
+                        # Try to determine Power version from /proc/cpuinfo
+                        if grep -qi "power10" /proc/cpuinfo; then
+                            PROCESSOR_BRAND="POWER10"
+                        elif grep -qi "power9" /proc/cpuinfo; then
+                            PROCESSOR_BRAND="POWER9"
+                        elif grep -qi "power8" /proc/cpuinfo; then
+                            PROCESSOR_BRAND="POWER8"
+                        elif grep -qi "power7" /proc/cpuinfo; then
+                            PROCESSOR_BRAND="POWER7"
+                        else
+                            PROCESSOR_BRAND="POWER"
+                        fi
+                        logD "IBM Power processor detected: ${PROCESSOR_BRAND}"
+                        ;;
+                    *)
+                        logD "Unknown processor architecture: ${ARCH}"
+                        ;;
+                esac
+                ;;
+        esac
+    fi
+    
+    # Set defaults if detection failed
+    if [ -z "$PROCESSOR_VENDOR" ]; then
+        PROCESSOR_VENDOR="Unknown"
+        logD "Processor vendor could not be determined"
+    fi
+    if [ -z "$PROCESSOR_BRAND" ]; then
+        PROCESSOR_BRAND="Unknown"
+        logD "Processor brand could not be determined"
+    fi
+    
+    log "Processor detection complete: ${PROCESSOR_VENDOR} ${PROCESSOR_BRAND}"
+    write_csv "PROCESSOR_VENDOR" "$PROCESSOR_VENDOR"
+    write_csv "PROCESSOR_BRAND" "$PROCESSOR_BRAND"
+}
+
+# Function to check processor eligibility
+check_processor_eligibility() {
+    PROCESSOR_ELIGIBLE="false"
+    local processors_csv="${SCRIPT_DIR}/ibm-eligible-processors.csv"
+    
+    logD "Checking processor eligibility using: ${processors_csv}"
+    
+    if [ ! -f "$processors_csv" ]; then
+        log "Warning: Processor eligibility file not found: ${processors_csv}"
+        write_csv "PROCESSOR_ELIGIBLE" "$PROCESSOR_ELIGIBLE"
+        return
+    fi
+    
+    if [ "$PROCESSOR_VENDOR" = "Unknown" ] || [ "$PROCESSOR_BRAND" = "Unknown" ]; then
+        logD "Cannot check processor eligibility - vendor or brand unknown"
+        write_csv "PROCESSOR_ELIGIBLE" "$PROCESSOR_ELIGIBLE"
+        return
+    fi
+    
+    # Read CSV file and check for matches
+    # Skip header line and search for processor vendor/brand combination
+    while IFS=',' read -r vendor brand type os version || [ -n "$vendor" ]; do
+        # Skip empty lines and header
+        [ -z "$vendor" ] && continue
+        [ "$vendor" = "processor-vendor" ] && continue
+        
+        logD "Checking: vendor='${vendor}' brand='${brand}' against '${PROCESSOR_VENDOR}' '${PROCESSOR_BRAND}'"
+        
+        # Compare vendor and brand (case insensitive)
+        if echo "$vendor" | grep -qi "^${PROCESSOR_VENDOR}$" && echo "$brand" | grep -qi "^${PROCESSOR_BRAND}"; then
+            PROCESSOR_ELIGIBLE="true"
+            logD "Processor eligibility match found: ${vendor} ${brand}"
+            break
+        fi
+    done < "$processors_csv"
+    
+    log "Processor eligibility check complete: ${PROCESSOR_ELIGIBLE}"
+    write_csv "PROCESSOR_ELIGIBLE" "$PROCESSOR_ELIGIBLE"
+}
+
+# Function to check OS and virtualization eligibility
+check_os_virt_eligibility() {
+    OS_ELIGIBLE="false"
+    VIRT_ELIGIBLE="false"
+    local virt_os_csv="${SCRIPT_DIR}/ibm-eligible-virt-and-os.csv"
+    
+    logD "Checking OS and virtualization eligibility using: ${virt_os_csv}"
+    
+    if [ ! -f "$virt_os_csv" ]; then
+        log "Warning: OS/Virtualization eligibility file not found: ${virt_os_csv}"
+        write_csv "OS_ELIGIBLE" "$OS_ELIGIBLE"
+        write_csv "VIRT_ELIGIBLE" "$VIRT_ELIGIBLE"
+        return
+    fi
+    
+    # Normalize OS name for comparison
+    local normalized_os_name=""
+    case "$OS_NAME" in
+        "Red Hat Enterprise Linux")
+            normalized_os_name="Red Hat Enterprise Linux"
+            ;;
+        "SUSE Linux Enterprise Server")
+            normalized_os_name="SUSE Linux Enterprise Server"
+            ;;
+        "AIX")
+            normalized_os_name="AIX"
+            ;;
+        "Solaris")
+            normalized_os_name="Solaris"
+            ;;
+        "Ubuntu")
+            normalized_os_name="Ubuntu"
+            ;;
+        "CentOS")
+            normalized_os_name="CentOS"
+            ;;
+        "Debian")
+            normalized_os_name="Debian"
+            ;;
+        "Oracle Linux")
+            normalized_os_name="Oracle Linux"
+            ;;
+        "IBM i")
+            normalized_os_name="IBM i"
+            ;;
+        "Windows")
+            normalized_os_name="Windows"
+            ;;
+        *)
+            normalized_os_name="$OS_NAME"
+            ;;
+    esac
+    
+    # Normalize virtualization type for comparison
+    local normalized_virt_type=""
+    case "$VIRT_TYPE" in
+        "PowerVM - Micro-Partitioning")
+            normalized_virt_type="PowerVM - Micro-Partitioning"
+            ;;
+        "PowerVM - LPAR")
+            normalized_virt_type="PowerVM - LPAR"
+            ;;
+        "KVM hypervisor")
+            normalized_virt_type="KVM hypervisor standalone"
+            ;;
+        "VMware vSphere"|"VMware")
+            normalized_virt_type="VMware vSphere"
+            ;;
+        "MS Hyper-V")
+            normalized_virt_type="MS Hyper-V"
+            ;;
+        "CITRIX Hypervisor")
+            normalized_virt_type="CITRIX Hypervisor"
+            ;;
+        "Nutanix AHV (PRISM)")
+            normalized_virt_type="Nutanix AHV (PRISM)"
+            ;;
+        "z/VM")
+            normalized_virt_type="z/VM"
+            ;;
+        "Containers/Zones")
+            normalized_virt_type="Containers/Zones"
+            ;;
+        "none")
+            # For non-virtualized systems, we don't check virtualization eligibility
+            normalized_virt_type="none"
+            ;;
+        *)
+            normalized_virt_type="$VIRT_TYPE"
+            ;;
+    esac
+    
+    logD "Normalized OS: '${normalized_os_name}', Normalized Virt: '${normalized_virt_type}'"
+    
+    # Read CSV file and check for matches
+    while IFS=',' read -r virt_vendor virt_tech eligible_os sub_cap_form ilmt_version || [ -n "$virt_vendor" ]; do
+        # Skip empty lines and header
+        [ -z "$virt_vendor" ] && continue
+        [ "$virt_vendor" = "virtualization-vendor" ] && continue
+        
+        # Check OS eligibility
+        if echo "$eligible_os" | grep -qi "$normalized_os_name"; then
+            # Further check version if needed
+            local version_match="true"
+            case "$normalized_os_name" in
+                "AIX")
+                    # Check if detected version meets minimum requirements
+                    if echo "$eligible_os" | grep -q "AIX.*[0-9]"; then
+                        local required_version=$(echo "$eligible_os" | sed 's/.*AIX \([0-9.]*\).*/\1/')
+                        logD "AIX version check: detected=${OS_VERSION}, required=${required_version}"
+                        # Simple version comparison for AIX (e.g., 7.2 >= 7.1)
+                        if [ -n "$required_version" ]; then
+                            # Convert versions to numbers for comparison (e.g., 7.2 -> 72, 6.1 -> 61)
+                            local detected_num=$(echo "$OS_VERSION" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/')
+                            local required_num=$(echo "$required_version" | sed 's/\([0-9]*\)\.\([0-9]*\).*/\1\2/')
+                            if [ "$detected_num" -lt "$required_num" ] 2>/dev/null; then
+                                version_match="false"
+                            fi
+                        fi
+                    fi
+                    ;;
+                "Red Hat Enterprise Linux")
+                    # Check RHEL version
+                    if echo "$eligible_os" | grep -q "Red Hat Enterprise Linux.*[0-9]"; then
+                        local required_version=$(echo "$eligible_os" | sed 's/.*Red Hat Enterprise Linux \([0-9]*\).*/\1/')
+                        logD "RHEL version check: detected=${OS_VERSION}, required=${required_version}"
+                        if [ -n "$required_version" ]; then
+                            local detected_major=$(echo "$OS_VERSION" | cut -d'.' -f1)
+                            if [ "$detected_major" -lt "$required_version" ] 2>/dev/null; then
+                                version_match="false"
+                            fi
+                        fi
+                    fi
+                    ;;
+            esac
+            
+            if [ "$version_match" = "true" ]; then
+                OS_ELIGIBLE="true"
+                logD "OS eligibility match found: ${eligible_os}"
+            fi
+        fi
+        
+        # Check virtualization eligibility (only if virtualized)
+        if [ "$IS_VIRTUALIZED" = "yes" ] && [ "$normalized_virt_type" != "none" ]; then
+            if echo "$virt_tech" | grep -qi "$normalized_virt_type"; then
+                VIRT_ELIGIBLE="true"
+                logD "Virtualization eligibility match found: ${virt_tech}"
+            fi
+        elif [ "$IS_VIRTUALIZED" = "no" ]; then
+            # Non-virtualized systems are considered "eligible" for virtualization purposes
+            VIRT_ELIGIBLE="true"
+            logD "Non-virtualized system - virtualization eligibility set to true"
+        fi
+    done < "$virt_os_csv"
+    
+    log "OS eligibility check complete: ${OS_ELIGIBLE}"
+    log "Virtualization eligibility check complete: ${VIRT_ELIGIBLE}"
+    write_csv "OS_ELIGIBLE" "$OS_ELIGIBLE"
+    write_csv "VIRT_ELIGIBLE" "$VIRT_ELIGIBLE"
+}
+
 # Function to show usage
 show_usage() {
     echo "Usage: $0 [output_file]"
@@ -465,6 +866,17 @@ show_usage() {
     echo "This script detects system information and outputs it in CSV format with columns:"
     echo "  Parameter, Value"
     echo ""
+    echo "Output parameters include:"
+    echo "  - detection_timestamp: ISO 8601 timestamp"
+    echo "  - OS_NAME, OS_VERSION: Operating system information"
+    echo "  - CPU_COUNT: Number of available CPUs"
+    echo "  - IS_VIRTUALIZED: yes/no if running on virtualized platform"
+    echo "  - VIRT_TYPE: Type of virtualization technology"
+    echo "  - PROCESSOR_VENDOR, PROCESSOR_BRAND: Processor information"
+    echo "  - PROCESSOR_ELIGIBLE: true/false if processor is IBM-eligible"
+    echo "  - OS_ELIGIBLE: true/false if OS is IBM-eligible"
+    echo "  - VIRT_ELIGIBLE: true/false if virtualization is IBM-eligible"
+    echo ""
     echo "Environment variables:"
     echo "  INSPECT_DEBUG=ON   Enable debug logging to stderr"
     echo ""
@@ -473,10 +885,17 @@ show_usage() {
     echo "  - Linux distributions (RHEL, SUSE, Ubuntu, CentOS, Debian, Oracle Linux)"
     echo "  - Solaris (Zones/Containers, Oracle VM for SPARC)"
     echo "  - Basic IBM i and Windows detection"
+    echo ""
+    echo "Note: Eligibility checking requires ibm-eligible-processors.csv and"
+    echo "      ibm-eligible-virt-and-os.csv files in the same directory as this script."
 }
 
 # Main execution
 main() {
+    # Determine script directory for CSV file locations
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    logD "Script directory: ${SCRIPT_DIR}"
+    
     # Set output file - use first argument or default
     if [ -n "$1" ]; then
         if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -498,6 +917,11 @@ main() {
     detect_os
     detect_cpu_count
     detect_virtualization
+    detect_processor
+    
+    # Check eligibility
+    check_processor_eligibility
+    check_os_virt_eligibility
     
     log "Detection complete. Results written to: ${OUTPUT_FILE}"
 }
