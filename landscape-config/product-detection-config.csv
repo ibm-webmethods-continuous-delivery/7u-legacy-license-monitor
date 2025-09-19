@@ -1,0 +1,3 @@
+process-grep-pattern,product-mnemo-id-prod,product-mnemo-id-nonprod,process-type,notes
+IntegrationServer,IS_ONP_PRD,IS_ONP_NPR,java,Java process with IntegrationServer in command line
+awbrokermon,BRK_ONP_PRD,BRK_ONP_NPR,native,Native process with awbrokermon in command line

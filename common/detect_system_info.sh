@@ -839,7 +839,13 @@ detect_processor() {
 # Function to check processor eligibility
 check_processor_eligibility() {
     PROCESSOR_ELIGIBLE="false"
-    local processors_csv="${SCRIPT_DIR}/ibm-eligible-processors.csv"
+    # Look for processors CSV in landscape-config first, then fall back to script directory
+    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
+    if [ -f "$landscape_config_dir/ibm-eligible-processors.csv" ]; then
+        processors_csv="$landscape_config_dir/ibm-eligible-processors.csv"
+    else
+        processors_csv="${SCRIPT_DIR}/ibm-eligible-processors.csv"
+    fi
     
     logD "Checking processor eligibility using: ${processors_csv}"
     
@@ -880,7 +886,13 @@ check_processor_eligibility() {
 check_os_virt_eligibility() {
     OS_ELIGIBLE="false"
     VIRT_ELIGIBLE="false"
-    local virt_os_csv="${SCRIPT_DIR}/ibm-eligible-virt-and-os.csv"
+    # Look for virt/OS CSV in landscape-config first, then fall back to script directory
+    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
+    if [ -f "$landscape_config_dir/ibm-eligible-virt-and-os.csv" ]; then
+        virt_os_csv="$landscape_config_dir/ibm-eligible-virt-and-os.csv"
+    else
+        virt_os_csv="${SCRIPT_DIR}/ibm-eligible-virt-and-os.csv"
+    fi
     
     logD "Checking OS and virtualization eligibility using: ${virt_os_csv}"
     
@@ -1212,6 +1224,180 @@ show_usage() {
     echo "      ibm-eligible-virt-and-os.csv files in the same directory as this script."
 }
 
+# Function to load node configuration based on hostname
+load_node_config() {
+    NODE_TYPE="PROD"  # Default to PROD
+    
+    # Get hostname for configuration lookup
+    hostname_short=$(hostname 2>/dev/null || echo "unknown")
+    logD "Detected hostname: $hostname_short"
+    
+    # Look for hostname-specific configuration in landscape-config directory
+    # First try the script directory's parent for landscape-config
+    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
+    if [ ! -d "$landscape_config_dir" ]; then
+        # Fall back to script directory itself for backward compatibility
+        landscape_config_dir="$SCRIPT_DIR"
+        logD "Using fallback configuration directory: $landscape_config_dir"
+    else
+        logD "Using landscape configuration directory: $landscape_config_dir"
+    fi
+    
+    # Look for hostname-specific directory
+    host_config_dir=""
+    if [ -d "$landscape_config_dir" ]; then
+        # Try exact hostname match first
+        if [ -d "$landscape_config_dir/$hostname_short" ]; then
+            host_config_dir="$landscape_config_dir/$hostname_short"
+            logD "Found exact hostname match: $host_config_dir"
+        else
+            # Try to find a directory that contains the hostname as substring
+            for dir in "$landscape_config_dir"/*; do
+                if [ -d "$dir" ]; then
+                    dir_name=$(basename "$dir")
+                    # Skip CSV files and hidden directories
+                    case "$dir_name" in
+                        *.csv|.*) continue ;;
+                    esac
+                    # Check if hostname appears in directory name
+                    case "$dir_name" in
+                        *"$hostname_short"*) 
+                            host_config_dir="$dir"
+                            logD "Found hostname substring match: $host_config_dir"
+                            break ;;
+                    esac
+                fi
+            done
+        fi
+    fi
+    
+    # Load configuration from host-specific directory or fall back to script directory
+    node_config_file=""
+    if [ -n "$host_config_dir" ] && [ -f "$host_config_dir/node-config.conf" ]; then
+        node_config_file="$host_config_dir/node-config.conf"
+        logD "Using host-specific configuration: $node_config_file"
+    else
+        # Fall back to script directory for backward compatibility
+        node_config_file="$SCRIPT_DIR/node-config.conf"
+        logD "Using fallback configuration: $node_config_file"
+    fi
+    
+    if [ -f "$node_config_file" ]; then
+        logD "Loading node configuration from: $node_config_file"
+        # Source the config file to get NODE_TYPE
+        # shellcheck source=/dev/null
+        . "$node_config_file" 2>/dev/null || {
+            logD "Warning: Could not source node configuration file"
+        }
+        logD "Node type set to: $NODE_TYPE"
+    else
+        logD "Node configuration file not found, using default: $NODE_TYPE"
+    fi
+}
+
+# Function to detect running webMethods products
+detect_products() {
+    # Look for product detection config in landscape-config first, then fall back to script directory
+    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
+    if [ -f "$landscape_config_dir/product-detection-config.csv" ]; then
+        product_config_file="$landscape_config_dir/product-detection-config.csv"
+        logD "Using landscape product detection config: $product_config_file"
+    else
+        product_config_file="${SCRIPT_DIR}/product-detection-config.csv"
+        logD "Using local product detection config: $product_config_file"
+    fi
+    
+    logD "Starting product detection"
+    
+    if [ ! -f "$product_config_file" ]; then
+        logD "Product detection config file not found: $product_config_file"
+        return 1
+    fi
+    
+    # Load node configuration to determine PROD/NON_PROD
+    load_node_config
+    
+    # If debug mode is on, capture the full process listing once before filtering
+    if [ "$INSPECT_DEBUG" = "ON" ]; then
+        case "$OS_NAME" in
+            "AIX"|"Solaris")
+                ps -ef > "${SESSION_DIR}/ps-ef.out" 2>"${SESSION_DIR}/ps-ef.err"
+                logD "Full process list captured: ${SESSION_DIR}/ps-ef.out"
+                ;;
+            *)
+                # Linux and others
+                ps aux > "${SESSION_DIR}/ps-aux.out" 2>"${SESSION_DIR}/ps-aux.err"
+                logD "Full process list captured: ${SESSION_DIR}/ps-aux.out"
+                ;;
+        esac
+    fi
+    
+    # Skip header line and process each product detection rule
+    while IFS=',' read -r grep_pattern prod_id nonprod_id process_type notes || [ -n "$grep_pattern" ]; do
+        # Skip empty lines and comments
+        [ -z "$grep_pattern" ] && continue
+        echo "$grep_pattern" | grep -q '^#' && continue
+        [ "$grep_pattern" = "process-grep-pattern" ] && continue  # Skip header
+        
+        logD "Checking for product pattern: $grep_pattern (type: $process_type)"
+        
+        # Determine which product ID to use based on node type
+        if [ "$NODE_TYPE" = "NON_PROD" ]; then
+            product_id="$nonprod_id"
+        else
+            product_id="$prod_id"
+        fi
+        
+        # Check if any processes match the pattern
+        found="false"
+        
+        # Use different process inspection methods based on OS
+        case "$OS_NAME" in
+            "AIX")
+                if ps -ef | grep -v grep | grep -q "$grep_pattern"; then
+                    found="true"
+                fi
+                ;;
+            "Solaris")
+                if ps -ef | grep -v grep | grep -q "$grep_pattern"; then
+                    found="true"
+                fi
+                ;;
+            *)
+                # Linux and others
+                if ps aux | grep -v grep | grep -q "$grep_pattern"; then
+                    found="true"
+                fi
+                ;;
+        esac
+        
+        if [ "$found" = "true" ]; then
+            logD "Found running process for product: $product_id (note: $notes)"
+            write_csv "$product_id" "present"
+            
+            # If debug mode is on, capture the specific grep results for this product
+            if [ "$INSPECT_DEBUG" = "ON" ]; then
+                debug_file="${SESSION_DIR}/processes_${product_id}.out"
+                case "$OS_NAME" in
+                    "AIX"|"Solaris")
+                        ps -ef | grep -v grep | grep "$grep_pattern" > "$debug_file" 2>/dev/null
+                        ;;
+                    *)
+                        ps aux | grep -v grep | grep "$grep_pattern" > "$debug_file" 2>/dev/null
+                        ;;
+                esac
+                logD "Process details saved to: $debug_file"
+            fi
+        else
+            logD "No running process found for pattern: $grep_pattern"
+            write_csv "$product_id" "absent"
+        fi
+        
+    done < "$product_config_file"
+    
+    logD "Product detection completed"
+}
+
 # Main execution
 main() {
     # Determine script directory for CSV file locations
@@ -1276,6 +1462,9 @@ main() {
     
     # Calculate considered CPUs based on eligibility and physical constraints
     calculate_considered_cpus
+    
+    # Detect running webMethods products
+    detect_products
     
     log "Detection complete. Results written to: ${OUTPUT_FILE}"
     log "Session log available at: ${SESSION_LOG}"
