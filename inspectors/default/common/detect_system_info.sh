@@ -17,6 +17,8 @@
 # Author: Generated and refined by Mihai Ungureanu
 # Date: September 16, 2025
 
+# shellcheck disable=SC3043
+
 set -e
 
 # Global variables for results

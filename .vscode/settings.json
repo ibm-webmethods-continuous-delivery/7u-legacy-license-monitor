@@ -1,6 +1,29 @@
 {
   "cSpell.words": [
+    "awbrokermon",
+    "bindprocessor",
+    "CPUS",
+    "DLPAR",
     "ilmt",
-    "subcapacity"
+    "isainfo",
+    "lparstat",
+    "lsdev",
+    "mnemo",
+    "nonprod",
+    "Nutanix",
+    "opteron",
+    "prtconf",
+    "psrinfo",
+    "sles",
+    "sparcv",
+    "subcapacity",
+    "sunos",
+    "sysinfo",
+    "ultrasparc",
+    "vcpu",
+    "VIRT",
+    "virtinfo",
+    "webmethods",
+    "zonename"
   ]
 }

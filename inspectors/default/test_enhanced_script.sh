@@ -1,5 +1,12 @@
 #!/bin/sh
+#
+# Copyright IBM Corp. 2025 - 2025
+# SPDX-License-Identifier: Apache-2.0
+#
 # Test script to validate enhanced functionality
+
+# shellcheck disable=SC3043
+
 
 # Set debug mode
 export INSPECT_DEBUG=ON
@@ -16,7 +23,11 @@ echo "- Virt/OS: $(ls -la common/ibm-eligible-virt-and-os.csv)"
 
 # Run the script with debug output
 echo "Running enhanced script..."
-cd common
+
+# Ensure test output directory exists
+mkdir -p test-detection-output
+
+cd common || exit 1
 # Use bash if available, otherwise fall back to sh
 if command -v bash >/dev/null 2>&1; then
     bash detect_system_info.sh ../test-detection-output

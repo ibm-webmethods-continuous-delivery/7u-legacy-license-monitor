@@ -28,10 +28,20 @@ echo ""
 
 # Check required files exist
 echo "Checking required files..."
-required_files="common/detect_system_info.sh test_enhanced_script.sh README.md"
+required_files="common/detect_system_info.sh test_enhanced_script.sh"
+repo_root_files="../../README.md ../../REQUIREMENTS.md"
 missing_files=""
 
 for file in $required_files; do
+    if [ ! -f "$file" ]; then
+        missing_files="$missing_files $file"
+    else
+        echo "✓ Found: $file"
+    fi
+done
+
+# Check repository root files
+for file in $repo_root_files; do
     if [ ! -f "$file" ]; then
         missing_files="$missing_files $file"
     else
@@ -70,13 +80,16 @@ echo "Copying files to release directory..."
 cp -r common "$TEMP_DIR/"
 cp -r landscape-config "$TEMP_DIR/"
 
-# Copy root files
+# Copy inspector files
 cp test_enhanced_script.sh "$TEMP_DIR/"
-cp README.md "$TEMP_DIR/"
+
+# Copy repository root files
+cp ../../README.md "$TEMP_DIR/"
+cp ../../REQUIREMENTS.md "$TEMP_DIR/"
 
 # Copy license if exists
-if [ -f "LICENSE" ]; then
-    cp LICENSE "$TEMP_DIR/"
+if [ -f "../../LICENSE" ]; then
+    cp ../../LICENSE "$TEMP_DIR/"
 fi
 
 # Create install script
