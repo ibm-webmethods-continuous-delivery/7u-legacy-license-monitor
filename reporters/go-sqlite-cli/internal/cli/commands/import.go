@@ -29,6 +29,9 @@ var (
 	importDBPath      string
 	importFile        string
 	importDir         string
+	inputDir          string
+	processedDir      string
+	discardsDir       string
 	loadReference     bool
 	productCodesPath  string
 )
@@ -43,16 +46,26 @@ func NewImportCmd() *cobra.Command {
 The import command supports:
 - Single file import: --file <path>
 - Directory import: --dir <path> (imports all .csv files)
+- Folder-based workflow: --input-dir <path> (with automatic file movement)
 - Automatic node creation if not exists
 - Physical host tracking and aggregation
 - Import audit trail
+- Idempotent imports (upsert on duplicate)
+
+Folder-based workflow:
+  Files in input-dir are processed and moved to:
+  - processed-dir on success
+  - discards-dir on error
 
 Example:
   # Import single file
   go-sqlite-cli import --db-path ./data/license-monitor.db --file ./iwdli_output_omis446_20251021_090906.csv
 
-  # Import all files in directory
-  go-sqlite-cli import --db-path ./data/license-monitor.db --dir ./input/`,
+  # Import all files in directory (no file movement)
+  go-sqlite-cli import --db-path ./data/license-monitor.db --dir ./input/
+
+  # Import with folder workflow (files are moved after processing)
+  go-sqlite-cli import --db-path ./data/license-monitor.db --input-dir ./test-data/input`,
 		RunE: runImport,
 	}
 
@@ -61,7 +74,13 @@ Example:
 	cmd.Flags().StringVar(&importFile, "file", "",
 		"Path to a single CSV file to import")
 	cmd.Flags().StringVar(&importDir, "dir", "",
-		"Directory containing CSV files to import")
+		"Directory containing CSV files to import (no file movement)")
+	cmd.Flags().StringVar(&inputDir, "input-dir", "",
+		"Input directory for folder-based workflow (files moved after processing)")
+	cmd.Flags().StringVar(&processedDir, "processed-dir", "",
+		"Processed files directory (default: <parent>/processed)")
+	cmd.Flags().StringVar(&discardsDir, "discards-dir", "",
+		"Discarded files directory (default: <parent>/discards)")
 	cmd.Flags().BoolVar(&loadReference, "load-reference", false,
 		"Load reference data (product codes) before importing")
 	cmd.Flags().StringVar(&productCodesPath, "product-codes", "",
@@ -72,17 +91,65 @@ Example:
 
 func runImport(cmd *cobra.Command, args []string) error {
 	// Validate flags
-	if importFile == "" && importDir == "" {
-		return fmt.Errorf("either --file or --dir must be specified")
+	modeCount := 0
+	if importFile != "" {
+		modeCount++
+	}
+	if importDir != "" {
+		modeCount++
+	}
+	if inputDir != "" {
+		modeCount++
 	}
 
-	if importFile != "" && importDir != "" {
-		return fmt.Errorf("cannot specify both --file and --dir")
+	if modeCount == 0 {
+		return fmt.Errorf("one of --file, --dir, or --input-dir must be specified")
+	}
+	if modeCount > 1 {
+		return fmt.Errorf("only one of --file, --dir, or --input-dir can be specified")
 	}
 
 	// Check database exists
 	if _, err := os.Stat(importDBPath); os.IsNotExist(err) {
 		return fmt.Errorf("database does not exist at %s\nRun 'go-sqlite-cli init' first", importDBPath)
+	}
+
+	// Setup folder-based workflow if using input-dir
+	var moveFiles bool
+	var targetProcessedDir, targetDiscardsDir string
+	if inputDir != "" {
+		moveFiles = true
+		
+		// Determine processed and discards directories
+		parentDir := filepath.Dir(inputDir)
+		if processedDir == "" {
+			targetProcessedDir = filepath.Join(parentDir, "processed")
+		} else {
+			targetProcessedDir = processedDir
+		}
+		
+		if discardsDir == "" {
+			targetDiscardsDir = filepath.Join(parentDir, "discards")
+		} else {
+			targetDiscardsDir = discardsDir
+		}
+
+		// Create directories if they don't exist
+		if err := os.MkdirAll(inputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create input directory: %w", err)
+		}
+		if err := os.MkdirAll(targetProcessedDir, 0755); err != nil {
+			return fmt.Errorf("failed to create processed directory: %w", err)
+		}
+		if err := os.MkdirAll(targetDiscardsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create discards directory: %w", err)
+		}
+
+		fmt.Printf("Folder-based workflow enabled:\n")
+		fmt.Printf("  Input:     %s\n", inputDir)
+		fmt.Printf("  Processed: %s\n", targetProcessedDir)
+		fmt.Printf("  Discards:  %s\n", targetDiscardsDir)
+		fmt.Println()
 	}
 
 	// Connect to database
@@ -113,8 +180,13 @@ func runImport(cmd *cobra.Command, args []string) error {
 	var files []string
 	if importFile != "" {
 		files = []string{importFile}
-	} else {
+	} else if importDir != "" {
 		files, err = findCSVFiles(importDir)
+		if err != nil {
+			return fmt.Errorf("failed to find CSV files: %w", err)
+		}
+	} else if inputDir != "" {
+		files, err = findCSVFiles(inputDir)
 		if err != nil {
 			return fmt.Errorf("failed to find CSV files: %w", err)
 		}
@@ -134,17 +206,30 @@ func runImport(cmd *cobra.Command, args []string) error {
 	totalErrors := 0
 
 	for i, file := range files {
-		fmt.Printf("[%d/%d] Importing: %s\n", i+1, len(files), filepath.Base(file))
+		fileName := filepath.Base(file)
+		fmt.Printf("[%d/%d] Importing: %s\n", i+1, len(files), fileName)
 
 		result, err := service.ImportCSVFile(file)
 		if err != nil {
 			fmt.Printf("  ERROR: %v\n", err)
 			totalErrors++
+			
+			// Move to discards if folder workflow enabled
+			if moveFiles {
+				discardPath := filepath.Join(targetDiscardsDir, fileName)
+				if moveErr := os.Rename(file, discardPath); moveErr != nil {
+					fmt.Printf("  WARNING: Failed to move to discards: %v\n", moveErr)
+				} else {
+					fmt.Printf("  Moved to: %s\n", targetDiscardsDir)
+				}
+			}
+			fmt.Println()
 			continue
 		}
 
 		fmt.Printf("  Session ID: %s\n", result.SessionID)
 		fmt.Printf("  Records created: %d\n", result.RecordsCreated)
+		fmt.Printf("  Records updated: %d\n", result.RecordsUpdated)
 
 		if len(result.Errors) > 0 {
 			fmt.Printf("  Warnings: %d\n", len(result.Errors))
@@ -156,6 +241,17 @@ func runImport(cmd *cobra.Command, args []string) error {
 		totalCreated += result.RecordsCreated
 		totalUpdated += result.RecordsUpdated
 		totalSkipped += result.RecordsSkipped
+
+		// Move to processed if folder workflow enabled
+		if moveFiles {
+			processedPath := filepath.Join(targetProcessedDir, fileName)
+			if moveErr := os.Rename(file, processedPath); moveErr != nil {
+				fmt.Printf("  WARNING: Failed to move to processed: %v\n", moveErr)
+			} else {
+				fmt.Printf("  Moved to: %s\n", targetProcessedDir)
+			}
+		}
+		
 		fmt.Println()
 	}
 

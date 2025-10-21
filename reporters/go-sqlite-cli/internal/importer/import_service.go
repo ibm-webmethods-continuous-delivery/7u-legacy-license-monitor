@@ -75,19 +75,29 @@ func (s *ImportService) ImportCSVFile(filePath string) (*ImportResult, error) {
 		}
 	}
 
-	// 3. Insert measurement
-	if err := s.insertMeasurement(tx, mainFQDN, record); err != nil {
+	// 3. Insert or update measurement
+	isNewMeasurement, err := s.insertMeasurement(tx, mainFQDN, record)
+	if err != nil {
 		return nil, fmt.Errorf("failed to insert measurement: %w", err)
 	}
-	result.RecordsCreated++
+	if isNewMeasurement {
+		result.RecordsCreated++
+	} else {
+		result.RecordsUpdated++
+	}
 
-	// 4. Insert detected products
+	// 4. Insert or update detected products
 	for _, detection := range record.ProductDetections {
-		if err := s.insertDetectedProduct(tx, mainFQDN, record.Timestamp, detection); err != nil {
+		isNewProduct, err := s.insertDetectedProduct(tx, mainFQDN, record.Timestamp, detection)
+		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("failed to insert product %s: %v", detection.ProductCode, err))
 			// Continue with other products
 		} else {
-			result.RecordsCreated++
+			if isNewProduct {
+				result.RecordsCreated++
+			} else {
+				result.RecordsUpdated++
+			}
 		}
 	}
 
@@ -188,31 +198,51 @@ func (s *ImportService) ensurePhysicalHost(tx *sql.Tx, record *CSVRecord) error 
 	return nil
 }
 
-// insertMeasurement inserts a measurement record
-func (s *ImportService) insertMeasurement(tx *sql.Tx, mainFQDN string, record *CSVRecord) error {
+// insertMeasurement inserts or updates a measurement record (idempotent)
+func (s *ImportService) insertMeasurement(tx *sql.Tx, mainFQDN string, record *CSVRecord) (bool, error) {
 	// Parse CPU count
 	cpuCountStr := strings.TrimSpace(record.GetSystemField("CPU_COUNT"))
 	cpuCount, err := strconv.Atoi(cpuCountStr)
 	if err != nil {
-		return fmt.Errorf("invalid CPU_COUNT value: %s", cpuCountStr)
+		return false, fmt.Errorf("invalid CPU_COUNT value: %s", cpuCountStr)
 	}
 
 	// Parse considered CPUs
 	consideredCPUsStr := strings.TrimSpace(record.GetSystemField("CONSIDERED_CPUS"))
 	consideredCPUs, err := strconv.Atoi(consideredCPUsStr)
 	if err != nil {
-		return fmt.Errorf("invalid CONSIDERED_CPUS value: %s", consideredCPUsStr)
+		return false, fmt.Errorf("invalid CONSIDERED_CPUS value: %s", consideredCPUsStr)
 	}
 
-	_, err = tx.Exec(`
+	// Use INSERT ... ON CONFLICT DO UPDATE for idempotent operation
+	result, err := tx.Exec(`
 		INSERT INTO measurements (
 			main_fqdn, detection_timestamp, session_directory,
 			os_name, os_version, cpu_count,
 			is_virtualized, virt_type, processor_vendor, processor_brand,
 			host_physical_cpus, partition_cpus,
 			processor_eligible, os_eligible, virt_eligible,
-			considered_cpus, physical_host_id, host_id_method, host_id_confidence
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			considered_cpus, physical_host_id, host_id_method, host_id_confidence,
+			created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(main_fqdn, detection_timestamp) DO UPDATE SET
+			session_directory = excluded.session_directory,
+			os_name = excluded.os_name,
+			os_version = excluded.os_version,
+			cpu_count = excluded.cpu_count,
+			is_virtualized = excluded.is_virtualized,
+			virt_type = excluded.virt_type,
+			processor_vendor = excluded.processor_vendor,
+			processor_brand = excluded.processor_brand,
+			host_physical_cpus = excluded.host_physical_cpus,
+			partition_cpus = excluded.partition_cpus,
+			processor_eligible = excluded.processor_eligible,
+			os_eligible = excluded.os_eligible,
+			virt_eligible = excluded.virt_eligible,
+			considered_cpus = excluded.considered_cpus,
+			physical_host_id = excluded.physical_host_id,
+			host_id_method = excluded.host_id_method,
+			host_id_confidence = excluded.host_id_confidence
 	`,
 		mainFQDN,
 		record.Timestamp,
@@ -236,19 +266,26 @@ func (s *ImportService) insertMeasurement(tx *sql.Tx, mainFQDN string, record *C
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to insert measurement: %w", err)
+		return false, fmt.Errorf("failed to insert/update measurement: %w", err)
 	}
 
-	return nil
+	// Check if this was an insert or update
+	rowsAffected, _ := result.RowsAffected()
+	isNew := rowsAffected == 1
+
+	return isNew, nil
 }
 
-// insertDetectedProduct inserts a detected product record
-func (s *ImportService) insertDetectedProduct(tx *sql.Tx, mainFQDN string, timestamp time.Time, detection *ProductDetection) error {
-	_, err := tx.Exec(`
+// insertDetectedProduct inserts or updates a detected product record (idempotent)
+func (s *ImportService) insertDetectedProduct(tx *sql.Tx, mainFQDN string, timestamp time.Time, detection *ProductDetection) (bool, error) {
+	result, err := tx.Exec(`
 		INSERT INTO detected_products (
 			main_fqdn, product_mnemo_code, detection_timestamp,
-			status, install_count
-		) VALUES (?, ?, ?, ?, ?)
+			status, install_count, created_at
+		) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(main_fqdn, product_mnemo_code, detection_timestamp) DO UPDATE SET
+			status = excluded.status,
+			install_count = excluded.install_count
 	`,
 		mainFQDN,
 		detection.ProductCode,
@@ -258,10 +295,14 @@ func (s *ImportService) insertDetectedProduct(tx *sql.Tx, mainFQDN string, times
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to insert detected product: %w", err)
+		return false, fmt.Errorf("failed to insert/update detected product: %w", err)
 	}
 
-	return nil
+	// Check if this was an insert or update
+	rowsAffected, _ := result.RowsAffected()
+	isNew := rowsAffected == 1
+
+	return isNew, nil
 }
 
 // insertImportSession records the import session

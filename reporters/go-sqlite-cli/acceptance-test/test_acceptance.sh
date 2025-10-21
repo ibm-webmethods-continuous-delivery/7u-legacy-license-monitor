@@ -2,8 +2,7 @@
 # Acceptance tests for go-sqlite-cli reporter
 # Tests the complete workflow: init database, load reference data, import inspection data, generate reports
 
-# Exit on error
-set -e
+# NOTE: Do not use 'set -e' as it conflicts with shunit2 test assertions
 
 # Test configuration
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
