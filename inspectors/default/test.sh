@@ -37,7 +37,8 @@ TEST_06_DIR="${TEST_BASE_DIR}/test-06-config-validation"
 TEST_SUMMARY="${TEST_BASE_DIR}/test_summary.txt"
 
 TEST_IWDLI_COLORED=${TEST_IWDLI_COLORED:-NO}
-TEST_SHELL_COMMAND=${TEST_SHELL_COMMAND:-sh}
+# Note, putting the default on bash to facilitate a bit default test on Solaris 8
+TEST_SHELL_COMMAND=${TEST_SHELL_COMMAND:-bash}
 
 # Color codes for output (if terminal supports it)
 if [ "${TEST_IWDLI_COLORED}" = "YES" ]; then

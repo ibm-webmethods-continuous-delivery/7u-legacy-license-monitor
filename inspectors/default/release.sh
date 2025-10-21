@@ -33,7 +33,7 @@ echo ""
 
 # Check required files exist
 echo "Checking required files..."
-required_files="common/detect_system_info.sh test.sh"
+required_files="common/detect_system_info.sh test.sh test_meta.sh"
 repo_root_files="../../README.md ../../REQUIREMENTS.md"
 missing_files=""
 
@@ -86,7 +86,7 @@ cp -r common "$TEMP_DIR/"
 cp -r landscape-config "$TEMP_DIR/"
 
 # Copy inspector files
-cp test.sh "${TEMP_DIR}/"
+cp test*.sh "${TEMP_DIR}/"
 
 # Copy repository root files
 cp ../../README.md "$TEMP_DIR/"
