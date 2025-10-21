@@ -1,0 +1,8 @@
+# Test output
+test-data/*.db
+test-data/*.log
+test-data/temp-*
+
+# Test results
+*.output
+*.result

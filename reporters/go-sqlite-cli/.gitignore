@@ -1,0 +1,47 @@
+# Build artifacts
+target/
+bin/
+prodcontainer/seed-go-sqlite-api-static
+prodcontainer/test-data/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+coverage.out
+coverage.html
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database files (keep data directory structure but ignore actual db files)
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Go specific
+*.test
+*.prof
+
+# Backup files
+*.bak
+*.backup

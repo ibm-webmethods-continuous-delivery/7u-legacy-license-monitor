@@ -241,6 +241,33 @@ Reporters are independent applications, runnable from commandline on demand and 
 
 It is preferable to intersect as little as possible with the target environment, therefore a preferred solution is having the reporters written in go and statically linked so that the code deliverable is a single file.
 
+### Reporter Testing
+
+The go-sqlite-cli reporter includes comprehensive acceptance testing that validates end-to-end functionality:
+
+**Test Framework**: The acceptance test harness uses shunit2 for shell-based testing and is integrated with the build process.
+
+**Test Location**: `reporters/go-sqlite-cli/acceptance-test/`
+
+**Test Execution**: Acceptance tests run automatically after a successful static binary build within the licmon-dev01 devcontainer.
+
+**Test Scenarios**: The acceptance test suite validates the following workflow:
+1. **Database Initialization**: Create a new SQLite database with complete schema
+2. **Reference Data Loading**: Import structural data including product codes and license terms
+3. **Inspection Data Import**: Load inspector-generated CSV files with measurement data (repeatable)
+4. **Report Generation**: Produce license compliance reports against imported data
+
+**Test Data**: The test harness uses fixture files including:
+- Sample inspector CSV outputs from multiple nodes
+- Product code mappings (product-codes.csv)
+- Expected output validation files
+
+**Integration**: Tests are integrated into the Makefile build process and can be run via:
+```bash
+make acceptance-test     # Run acceptance tests only
+make test-all           # Run unit tests and acceptance tests
+```
+
 ## Transport
 
 The transport of information between inspectors and reporters occur via file transfer, either in push or pull mode, according to administrator's preference.
