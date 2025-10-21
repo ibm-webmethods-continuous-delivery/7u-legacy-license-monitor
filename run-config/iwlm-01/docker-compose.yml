@@ -1,0 +1,7 @@
+services:
+  d1:
+    image: iwlm-d1
+    build: ./build
+    volumes:
+      - ../../:/workspace/iwlm
+    entrypoint: sleep infinity

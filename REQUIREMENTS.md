@@ -45,15 +45,31 @@ The primary inspector implementation for webMethods license monitoring:
 - **Additional CSV files**: processor-codes.csv, virt-tech-codes.csv for extended categorization
 - **Example configurations**: `aix-61-host1/`, `aix-72-host2/`, `sunos-58-host3/`
 
+**Configuration Management Strategy:**
+- Configuration files are versioned and deployed separately from code
+- This allows updating eligibility rules when IBM releases new eligible processors/OS without code changes
+- Configuration directory location can be customized via `IWDLI_CONFIG_DIR` environment variable
+- Inspector fails with clear error if required CSV files are not found in configured location
+
 #### Release and Deployment System (`inspectors/default/`)
 
 - **`release.sh`**: Creates versioned tar.gz deployment packages
 - **`install.sh`**: Auto-generated installation script (created during release process)
+- **`test.sh`**: Comprehensive test suite for validation
 - **Deployment packages**: `ibm-webmethods-license-inspector-<version>.tar.gz`
+
+**Code/Configuration Separation:**
+- Inspector code (scripts in `common/`) can be updated independently of configuration
+- Configuration files (`landscape-config/`) can be updated independently of code
+- Use `IWDLI_CONFIG_DIR` environment variable to point to configuration location
+- Typical deployment:
+  - Code: `/opt/iwdli/common/`, `/opt/iwdli/test.sh`
+  - Config: `/etc/iwdli-config/landscape-config/` or `/opt/landscape-config/`
+  - Data: `/var/data/iwdli-output/` (controlled by `IWDLI_DATA_DIR`)
 
 #### Test Infrastructure (`inspectors/default/`)
 
-- **`test_enhanced_script.sh`**: Test harness for validating system detection functionality
+- **`test.sh`**: Comprehensive test harness for validating system detection functionality
 
 ### Reporters
 
@@ -110,6 +126,28 @@ The primary inspector is implemented as `common/detect_system_info.sh`, a compre
 - **Supports debugging**: Includes optional debug mode for troubleshooting and validation
 - **Hostname-based configuration**: Automatically loads configuration from `landscape-config/<hostname>/` directory structure
 - **Enhanced tracing**: Captures full process listings (ps-aux.out, ps-ef.out) for comprehensive debugging
+- **Physical host identification**: Captures unique identifiers for physical hosts to enable proper license aggregation in virtualized environments
+
+### Physical Host Identification Requirements
+
+**Business Requirement**: When multiple virtual machines run on the same physical host, license aggregation must count the physical host's CPU cores only once, rather than summing the virtual CPU allocations of individual VMs.
+
+**Technical Requirements**:
+1. **Host Identifier Detection**: Each inspector must attempt to determine a unique identifier for the underlying physical host when running in a virtualized environment
+2. **Cross-VM Correlation**: The identifier must be consistent across all VMs running on the same physical host
+3. **Fallback Strategy**: When physical host identification is not possible, the system must clearly indicate this limitation
+4. **Reporter Aggregation**: The reporter must use physical host identifiers to aggregate CPU counts at the physical host level
+
+**Implementation Approach**:
+- **AIX PowerVM**: Use hardware serial numbers, system identifiers, or hypervisor-provided host information
+- **Linux Virtualization**: Attempt to detect hypervisor-specific host identifiers (VMware host UUID, KVM host info, etc.)
+- **Solaris Zones**: Extract global zone or host system identifiers when possible
+- **Fallback**: When host identification fails, use virtual machine's own identifier with clear marking
+
+**CSV Output Enhancement**: The inspector output must include:
+- `PHYSICAL_HOST_ID`: Unique identifier for the physical host (when detectable)
+- `HOST_ID_METHOD`: Method used to determine the host ID (e.g., "hypervisor-uuid", "hardware-serial", "fallback-vm-id")
+- `HOST_ID_CONFIDENCE`: Confidence level ("high", "medium", "low") indicating reliability of host identification
 
 ### File Structure and Dependencies
 
@@ -298,6 +336,19 @@ The database is expected to contain the following tables:
     - **os-eligible**, mandatory: Boolean indicating IBM license eligibility of OS (OS_ELIGIBLE from CSV)
     - **virt-eligible**, mandatory: Boolean indicating IBM license eligibility of virtualization technology (VIRT_ELIGIBLE from CSV)
     - **considered-cpus**, mandatory: Final CPU count for licensing calculation based on eligibility rules (CONSIDERED_CPUS from CSV)
+    - **physical-host-id**, optional: Unique identifier of the physical host when running in virtualized environment (PHYSICAL_HOST_ID from CSV)
+    - **host-id-method**, optional: Method used to determine physical host ID (HOST_ID_METHOD from CSV)
+    - **host-id-confidence**, optional: Confidence level of physical host identification (HOST_ID_CONFIDENCE from CSV)
+
+6. physical-hosts
+
+    - **physical-host-id**, primary key, mandatory: Unique identifier for a physical host
+    - **host-id-method**, mandatory: Method used to determine this ID (e.g., "hypervisor-uuid", "hardware-serial")
+    - **host-id-confidence**, mandatory: Confidence level ("high", "medium", "low")
+    - **first-seen**, mandatory: Timestamp when this physical host was first detected
+    - **last-seen**, mandatory: Timestamp when this physical host was last detected
+    - **max-physical-cpus**, optional: Maximum number of physical CPUs detected across all measurements
+    - **notes**, optional: Additional information about the physical host
 
 5. detected-products
 
@@ -305,6 +356,39 @@ The database is expected to contain the following tables:
     - **product-mnemo-code**, part of primary key, foreign key to product-codes.product-mnemo-code
     - **timestamp**, part of primary key (corresponds to detection_timestamp from CSV)
     - **status**, mandatory: Detection status ("present" or "absent") indicating if product is running on the node
+
+## License Aggregation Rules for Physical Hosts
+
+When multiple virtual machines run on the same physical host, license calculation must follow these aggregation rules:
+
+### CPU Count Aggregation
+
+1. **Single Physical Host Detection**: When multiple VMs are identified as running on the same physical host (same `physical-host-id`), the reporter must count the physical host's CPU cores only once for licensing purposes.
+
+2. **Aggregation Logic**:
+   - Group all measurements by `physical-host-id` where `physical-host-id` is not null/unknown
+   - For each physical host group, use the maximum `host-physical-cpus` value detected across all VMs
+   - For VMs without reliable physical host identification, count their individual `considered-cpus` values
+   - Apply IBM licensing eligibility rules at the physical host level when possible
+
+3. **Confidence-Based Handling**:
+   - **High confidence** host IDs: Aggregate CPU counts with full confidence
+   - **Medium confidence** host IDs: Aggregate but flag for manual review
+   - **Low confidence** host IDs: Count individually but report potential duplications
+
+4. **Fallback Strategy**: When physical host identification fails or has low confidence, default to individual VM CPU counting to ensure compliance (may result in over-counting but maintains license compliance).
+
+### Example Scenarios
+
+**Scenario 1: Two VMs on Same Physical Host**
+- VM1: `physical-host-id=HOST123`, `host-physical-cpus=16`, `considered-cpus=4`
+- VM2: `physical-host-id=HOST123`, `host-physical-cpus=16`, `considered-cpus=8`
+- **Result**: Count 16 physical CPUs once (not 4+8=12)
+
+**Scenario 2: Mixed Environment**
+- VM1: `physical-host-id=HOST123`, `host-physical-cpus=16`
+- VM2: `physical-host-id=unknown`, `considered-cpus=4`
+- **Result**: Count 16 CPUs for HOST123 + 4 CPUs for VM2 = 20 total
 
 ## Relevant Official Documents
 

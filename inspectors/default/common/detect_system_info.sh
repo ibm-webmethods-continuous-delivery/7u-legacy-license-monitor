@@ -36,6 +36,16 @@ CONSIDERED_CPUS=""
 HOST_PHYSICAL_CPUS=""
 PARTITION_CPUS=""
 
+# Global variables for physical host identification
+PHYSICAL_HOST_ID=""
+HOST_ID_METHOD=""
+HOST_ID_CONFIDENCE=""
+
+# Global variables for disk-based product detection results
+DETECT_INSTALL_STATUS=""
+DETECT_INSTALL_COUNT=""
+DETECT_INSTALL_PATHS=""
+
 # Global variable for output file
 OUTPUT_FILE=""
 
@@ -63,9 +73,9 @@ log() {
     fi
 }
 
-# Function to log debug information if INSPECT_DEBUG=ON
+# Function to log debug information if IWDLI_DEBUG=ON
 logD() {
-    if [ "$INSPECT_DEBUG" = "ON" ]; then
+    if [ "$IWDLI_DEBUG" = "ON" ]; then
         echo "[DEBUG] $1" >&2
         if [ -n "$SESSION_LOG" ]; then
             echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
@@ -78,7 +88,7 @@ run_debug_cmd() {
     local cmd="$1"
     local cmd_name="$2"
     
-    if [ "$INSPECT_DEBUG" = "ON" ] && [ -n "$SESSION_DIR" ]; then
+    if [ "$IWDLI_DEBUG" = "ON" ] && [ -n "$SESSION_DIR" ]; then
         logD "Running command: $cmd"
         local out_file="${SESSION_DIR}/${cmd_name}.out"
         local err_file="${SESSION_DIR}/${cmd_name}.err"
@@ -100,6 +110,7 @@ run_debug_cmd() {
 
 # Function to detect operating system
 detect_os() {
+    # shellcheck disable=SC2006
     os_name=$(uname -s)
     logD "os_name=${os_name}"
     
@@ -396,6 +407,331 @@ detect_host_physical_cpus() {
     write_csv "PARTITION_CPUS" "${PARTITION_CPUS:-unknown}"
 }
 
+# Function to detect physical host identifier for VM aggregation
+detect_physical_host_id() {
+    PHYSICAL_HOST_ID="unknown"
+    HOST_ID_METHOD="none"
+    HOST_ID_CONFIDENCE="low"
+    
+    log "Starting physical host identification"
+    logD "Virtualization status: IS_VIRTUALIZED=${IS_VIRTUALIZED}, VIRT_TYPE=${VIRT_TYPE}"
+    
+    # Only attempt host identification if we're in a virtualized environment
+    if [ "$IS_VIRTUALIZED" = "yes" ]; then
+        case "$OS_NAME" in
+            "AIX")
+                detect_aix_physical_host_id
+                ;;
+            "SunOS")
+                detect_solaris_physical_host_id
+                ;;
+            "Red Hat Enterprise Linux"|"SUSE Linux Enterprise Server"|*Linux*)
+                detect_linux_physical_host_id
+                ;;
+            *)
+                logD "Physical host detection not implemented for OS: ${OS_NAME}"
+                ;;
+        esac
+    else
+        # Not virtualized - this IS the physical host
+        PHYSICAL_HOST_ID=$(hostname 2>/dev/null || echo "localhost")
+        HOST_ID_METHOD="physical-hostname"
+        HOST_ID_CONFIDENCE="high"
+        logD "Physical machine detected, using hostname as host ID: ${PHYSICAL_HOST_ID}"
+    fi
+    
+    log "Physical host identification complete: ID=${PHYSICAL_HOST_ID}, Method=${HOST_ID_METHOD}, Confidence=${HOST_ID_CONFIDENCE}"
+    
+    # Write to CSV
+    write_csv "PHYSICAL_HOST_ID" "$PHYSICAL_HOST_ID"
+    write_csv "HOST_ID_METHOD" "$HOST_ID_METHOD"
+    write_csv "HOST_ID_CONFIDENCE" "$HOST_ID_CONFIDENCE"
+}
+
+# AIX PowerVM physical host identification
+detect_aix_physical_host_id() {
+    logD "Attempting AIX physical host identification"
+    
+    # Method 1: Use uname -m to get the machine hardware name (physical host identifier)
+    if command -v uname >/dev/null 2>&1; then
+        machine_name=$(uname -m 2>/dev/null)
+        if [ -n "$machine_name" ] && [ "$machine_name" != "unknown" ]; then
+            PHYSICAL_HOST_ID="aix-machine-${machine_name}"
+            HOST_ID_METHOD="uname-machine"
+            HOST_ID_CONFIDENCE="high"
+            logD "AIX machine name found: ${machine_name}"
+            return
+        fi
+    fi
+    
+    # Method 2: Try to get hardware serial number from lscfg as fallback
+    if command -v lscfg >/dev/null 2>&1; then
+        serial=$(lscfg -pv | grep "System Serial Number" | head -1 | sed 's/.*System Serial Number[[:space:]]*\.*[[:space:]]*\(.*\)/\1/' 2>/dev/null)
+        if [ -n "$serial" ] && [ "$serial" != "Not Available" ]; then
+            PHYSICAL_HOST_ID="aix-serial-${serial}"
+            HOST_ID_METHOD="hardware-serial"
+            HOST_ID_CONFIDENCE="high"
+            logD "AIX hardware serial found: ${serial}"
+            return
+        fi
+    fi
+    
+    # Method 3: Try to get system identifier from lparstat (kept for compatibility)
+    if command -v lparstat >/dev/null 2>&1; then
+        lparstat_output=$(lparstat -i 2>/dev/null)
+        
+        # Look for Node Name (which is typically the partition name, not physical host)
+        node_name=$(echo "$lparstat_output" | grep "Node Name" | sed 's/.*Node Name[[:space:]]*:[[:space:]]*\(.*\)/\1/' 2>/dev/null)
+        if [ -n "$node_name" ]; then
+            PHYSICAL_HOST_ID="aix-node-${node_name}"
+            HOST_ID_METHOD="powervm-node-name"
+            HOST_ID_CONFIDENCE="low"
+            logD "AIX node name found (partition name): ${node_name}"
+            return
+        fi
+    fi
+    
+    # Method 4: Fallback to VM hostname with low confidence
+    vm_hostname=$(hostname 2>/dev/null || echo "unknown")
+    PHYSICAL_HOST_ID="aix-vm-${vm_hostname}"
+    HOST_ID_METHOD="fallback-vm-hostname"
+    HOST_ID_CONFIDENCE="low"
+    logD "AIX fallback to VM hostname: ${vm_hostname}"
+}
+
+# Solaris physical host identification
+detect_solaris_physical_host_id() {
+    logD "Attempting Solaris physical host identification"
+    
+    # Method 1: Try to get hardware serial from prtconf in global zone
+    if command -v prtconf >/dev/null 2>&1; then
+        # This might work if we can access global zone info
+        serial=$(prtconf -v 2>/dev/null | grep "banner-name" | head -1 | sed "s/.*banner-name: '\(.*\)'/\1/" 2>/dev/null)
+        if [ -n "$serial" ]; then
+            PHYSICAL_HOST_ID="solaris-banner-${serial}"
+            HOST_ID_METHOD="hardware-banner"
+            HOST_ID_CONFIDENCE="medium"
+            logD "Solaris hardware banner found: ${serial}"
+            return
+        fi
+    fi
+    
+    # Method 2: Try to get zone's underlying physical host info
+    if command -v zonename >/dev/null 2>&1 && command -v zoneadm >/dev/null 2>&1; then
+        zone_name=$(zonename 2>/dev/null)
+        # In a non-global zone, we have limited access to physical host info
+        # This is a challenging scenario - we might need to rely on configuration
+        if [ "$zone_name" != "global" ]; then
+            logD "In non-global zone (${zone_name}), limited physical host detection"
+        fi
+    fi
+    
+    # Method 3: Try hostid as a system identifier
+    if command -v hostid >/dev/null 2>&1; then
+        host_id=$(hostid 2>/dev/null)
+        if [ -n "$host_id" ]; then
+            PHYSICAL_HOST_ID="solaris-hostid-${host_id}"
+            HOST_ID_METHOD="solaris-hostid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "Solaris hostid found: ${host_id}"
+            return
+        fi
+    fi
+    
+    # Method 4: Fallback to VM hostname
+    vm_hostname=$(hostname 2>/dev/null || echo "unknown")
+    PHYSICAL_HOST_ID="solaris-vm-${vm_hostname}"
+    HOST_ID_METHOD="fallback-vm-hostname"
+    HOST_ID_CONFIDENCE="low"
+    logD "Solaris fallback to VM hostname: ${vm_hostname}"
+}
+
+# Linux physical host identification
+detect_linux_physical_host_id() {
+    logD "Attempting Linux physical host identification for VIRT_TYPE: ${VIRT_TYPE}"
+    
+    case "$VIRT_TYPE" in
+        *VMware*)
+            detect_vmware_host_id
+            ;;
+        *KVM*|*QEMU*)
+            detect_kvm_host_id
+            ;;
+        *Hyper-V*|*Microsoft*)
+            detect_hyperv_host_id
+            ;;
+        *Xen*)
+            detect_xen_host_id
+            ;;
+        *Oracle*)
+            detect_oracle_vm_host_id
+            ;;
+        *)
+            detect_generic_linux_host_id
+            ;;
+    esac
+}
+
+# VMware host identification
+detect_vmware_host_id() {
+    logD "Attempting VMware host identification"
+    
+    # Method 1: VMware tools vmware-toolbox-cmd
+    if command -v vmware-toolbox-cmd >/dev/null 2>&1; then
+        host_name=$(vmware-toolbox-cmd stat hosttime 2>/dev/null | head -1)
+        if [ -n "$host_name" ]; then
+            PHYSICAL_HOST_ID="vmware-host-${host_name}"
+            HOST_ID_METHOD="vmware-tools"
+            HOST_ID_CONFIDENCE="high"
+            logD "VMware host via tools: ${host_name}"
+            return
+        fi
+    fi
+    
+    # Method 2: Try DMI UUID as host identifier
+    if command -v dmidecode >/dev/null 2>&1; then
+        uuid=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        if [ -n "$uuid" ] && [ "$uuid" != "not present" ]; then
+            PHYSICAL_HOST_ID="vmware-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "VMware UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Method 3: Fallback
+    generic_linux_fallback "vmware"
+}
+
+# KVM host identification
+detect_kvm_host_id() {
+    logD "Attempting KVM host identification"
+    
+    # Method 1: Try to get KVM host info from /sys
+    if [ -f /sys/devices/virtual/dmi/id/product_uuid ]; then
+        uuid=$(cat /sys/devices/virtual/dmi/id/product_uuid 2>/dev/null)
+        if [ -n "$uuid" ]; then
+            PHYSICAL_HOST_ID="kvm-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "KVM UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Method 2: Try DMI UUID
+    if command -v dmidecode >/dev/null 2>&1; then
+        uuid=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        if [ -n "$uuid" ] && [ "$uuid" != "not present" ]; then
+            PHYSICAL_HOST_ID="kvm-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "KVM DMI UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Method 3: Fallback
+    generic_linux_fallback "kvm"
+}
+
+# Hyper-V host identification
+detect_hyperv_host_id() {
+    logD "Attempting Hyper-V host identification"
+    
+    # Method 1: Try to get Hyper-V specific UUID
+    if command -v dmidecode >/dev/null 2>&1; then
+        uuid=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        if [ -n "$uuid" ] && [ "$uuid" != "not present" ]; then
+            PHYSICAL_HOST_ID="hyperv-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "Hyper-V UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Method 2: Fallback
+    generic_linux_fallback "hyperv"
+}
+
+# Xen host identification
+detect_xen_host_id() {
+    logD "Attempting Xen host identification"
+    
+    # Method 1: Try Xen-specific methods
+    if [ -f /proc/xen/capabilities ]; then
+        caps=$(cat /proc/xen/capabilities 2>/dev/null)
+        logD "Xen capabilities: ${caps}"
+    fi
+    
+    # Method 2: Try DMI UUID
+    if command -v dmidecode >/dev/null 2>&1; then
+        uuid=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        if [ -n "$uuid" ] && [ "$uuid" != "not present" ]; then
+            PHYSICAL_HOST_ID="xen-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "Xen UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Method 3: Fallback
+    generic_linux_fallback "xen"
+}
+
+# Oracle VM host identification
+detect_oracle_vm_host_id() {
+    logD "Attempting Oracle VM host identification"
+    
+    # Similar to other hypervisors, try UUID
+    if command -v dmidecode >/dev/null 2>&1; then
+        uuid=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        if [ -n "$uuid" ] && [ "$uuid" != "not present" ]; then
+            PHYSICAL_HOST_ID="oraclevm-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="medium"
+            logD "Oracle VM UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Fallback
+    generic_linux_fallback "oraclevm"
+}
+
+# Generic Linux host identification
+detect_generic_linux_host_id() {
+    logD "Attempting generic Linux host identification"
+    
+    # Try DMI UUID as last resort
+    if command -v dmidecode >/dev/null 2>&1; then
+        uuid=$(dmidecode -s system-uuid 2>/dev/null | tr '[:upper:]' '[:lower:]')
+        if [ -n "$uuid" ] && [ "$uuid" != "not present" ]; then
+            PHYSICAL_HOST_ID="linux-uuid-${uuid}"
+            HOST_ID_METHOD="hypervisor-uuid"
+            HOST_ID_CONFIDENCE="low"
+            logD "Generic Linux UUID found: ${uuid}"
+            return
+        fi
+    fi
+    
+    # Fallback
+    generic_linux_fallback "generic"
+}
+
+# Common fallback method for Linux systems
+generic_linux_fallback() {
+    virt_prefix="$1"
+    vm_hostname=$(hostname 2>/dev/null || echo "unknown")
+    PHYSICAL_HOST_ID="${virt_prefix}-vm-${vm_hostname}"
+    HOST_ID_METHOD="fallback-vm-hostname"
+    HOST_ID_CONFIDENCE="low"
+    logD "Linux fallback (${virt_prefix}) to VM hostname: ${vm_hostname}"
+}
+
 # Function to detect virtualization
 detect_virtualization() {
     IS_VIRTUALIZED="no"
@@ -584,17 +920,17 @@ detect_virtualization() {
         logD "Checking dmesg for virtualization clues"
         if command -v dmesg >/dev/null 2>&1; then
             DMESG_OUTPUT=$(dmesg 2>/dev/null | head -50)
-            if echo "$DMESG_OUTPUT" | grep -qi "hypervisor\|vmware\|kvm\|xen"; then
+            if echo "$DMESG_OUTPUT" | grep -i "hypervisor\|vmware\|kvm\|xen" >/dev/null 2>&1; then
                 IS_VIRTUALIZED="yes"
                 logD "Virtualization indicators found in dmesg"
                 if [ "$VIRT_TYPE" = "none" ]; then
-                    if echo "$DMESG_OUTPUT" | grep -qi "vmware"; then
+                    if echo "$DMESG_OUTPUT" | grep -i "vmware" >/dev/null 2>&1; then
                         VIRT_TYPE="VMware"
                         logD "VMware detected in dmesg"
-                    elif echo "$DMESG_OUTPUT" | grep -qi "kvm"; then
+                    elif echo "$DMESG_OUTPUT" | grep -i "kvm" >/dev/null 2>&1; then
                         VIRT_TYPE="KVM hypervisor"
                         logD "KVM detected in dmesg"
-                    elif echo "$DMESG_OUTPUT" | grep -qi "xen"; then
+                    elif echo "$DMESG_OUTPUT" | grep -i "xen" >/dev/null 2>&1; then
                         VIRT_TYPE="Xen"
                         logD "Xen detected in dmesg"
                     else
@@ -759,11 +1095,11 @@ detect_processor() {
             "GenuineIntel")
                 PROCESSOR_VENDOR="Intel"
                 # Determine Intel processor type from model name
-                if echo "$MODEL_NAME" | grep -qi "xeon"; then
+                if echo "$MODEL_NAME" | grep -i "xeon" >/dev/null 2>&1; then
                     PROCESSOR_BRAND="Xeon - All Processor Numbers"
-                elif echo "$MODEL_NAME" | grep -qi "pentium"; then
+                elif echo "$MODEL_NAME" | grep -i "pentium" >/dev/null 2>&1; then
                     PROCESSOR_BRAND="Pentium - All Processor Numbers"
-                elif echo "$MODEL_NAME" | grep -qi "core"; then
+                elif echo "$MODEL_NAME" | grep -i "core" >/dev/null 2>&1; then
                     PROCESSOR_BRAND="Core - All Processor Numbers"
                 else
                     # Default to Xeon for unknown Intel processors in server context
@@ -773,11 +1109,11 @@ detect_processor() {
                 ;;
             "AuthenticAMD")
                 PROCESSOR_VENDOR="AMD"
-                if echo "$MODEL_NAME" | grep -qi "epyc"; then
+                if echo "$MODEL_NAME" | grep -i "epyc" >/dev/null 2>&1; then
                     PROCESSOR_BRAND="Epyc"
-                elif echo "$MODEL_NAME" | grep -qi "opteron.*6[0-9][0-9][0-9]"; then
+                elif echo "$MODEL_NAME" | grep -i "opteron.*6[0-9][0-9][0-9]" >/dev/null 2>&1; then
                     PROCESSOR_BRAND="Opteron 6000 series"
-                elif echo "$MODEL_NAME" | grep -qi "opteron"; then
+                elif echo "$MODEL_NAME" | grep -i "opteron" >/dev/null 2>&1; then
                     PROCESSOR_BRAND="Opteron"
                 else
                     # Default based on CPU family or model name
@@ -802,13 +1138,13 @@ detect_processor() {
                     "ppc64"|"ppc64le"|"ppc")
                         PROCESSOR_VENDOR="IBM"
                         # Try to determine Power version from /proc/cpuinfo
-                        if grep -qi "power10" /proc/cpuinfo; then
+                        if grep -i "power10" /proc/cpuinfo >/dev/null 2>&1; then
                             PROCESSOR_BRAND="POWER10"
-                        elif grep -qi "power9" /proc/cpuinfo; then
+                        elif grep -i "power9" /proc/cpuinfo >/dev/null 2>&1; then
                             PROCESSOR_BRAND="POWER9"
-                        elif grep -qi "power8" /proc/cpuinfo; then
+                        elif grep -i "power8" /proc/cpuinfo >/dev/null 2>&1; then
                             PROCESSOR_BRAND="POWER8"
-                        elif grep -qi "power7" /proc/cpuinfo; then
+                        elif grep -i "power7" /proc/cpuinfo >/dev/null 2>&1; then
                             PROCESSOR_BRAND="POWER7"
                         else
                             PROCESSOR_BRAND="POWER"
@@ -841,20 +1177,16 @@ detect_processor() {
 # Function to check processor eligibility
 check_processor_eligibility() {
     PROCESSOR_ELIGIBLE="false"
-    # Look for processors CSV in landscape-config first, then fall back to script directory
-    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
-    if [ -f "$landscape_config_dir/ibm-eligible-processors.csv" ]; then
-        processors_csv="$landscape_config_dir/ibm-eligible-processors.csv"
-    else
-        processors_csv="${SCRIPT_DIR}/ibm-eligible-processors.csv"
-    fi
+    # Load processors CSV from landscape-config (required)
+    landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
+    processors_csv="$landscape_config_dir/ibm-eligible-processors.csv"
     
     logD "Checking processor eligibility using: ${processors_csv}"
     
     if [ ! -f "$processors_csv" ]; then
-        log "Warning: Processor eligibility file not found: ${processors_csv}"
-        write_csv "PROCESSOR_ELIGIBLE" "$PROCESSOR_ELIGIBLE"
-        return
+        log "ERROR: Required processor eligibility file not found: ${processors_csv}"
+        log "ERROR: This file must exist in landscape-config directory"
+        exit 1
     fi
     
     if [ "$PROCESSOR_VENDOR" = "Unknown" ] || [ "$PROCESSOR_BRAND" = "Unknown" ]; then
@@ -888,21 +1220,16 @@ check_processor_eligibility() {
 check_os_virt_eligibility() {
     OS_ELIGIBLE="false"
     VIRT_ELIGIBLE="false"
-    # Look for virt/OS CSV in landscape-config first, then fall back to script directory
-    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
-    if [ -f "$landscape_config_dir/ibm-eligible-virt-and-os.csv" ]; then
-        virt_os_csv="$landscape_config_dir/ibm-eligible-virt-and-os.csv"
-    else
-        virt_os_csv="${SCRIPT_DIR}/ibm-eligible-virt-and-os.csv"
-    fi
+    # Load virt/OS CSV from landscape-config (required)
+    landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
+    virt_os_csv="$landscape_config_dir/ibm-eligible-virt-and-os.csv"
     
     logD "Checking OS and virtualization eligibility using: ${virt_os_csv}"
     
     if [ ! -f "$virt_os_csv" ]; then
-        log "Warning: OS/Virtualization eligibility file not found: ${virt_os_csv}"
-        write_csv "OS_ELIGIBLE" "$OS_ELIGIBLE"
-        write_csv "VIRT_ELIGIBLE" "$VIRT_ELIGIBLE"
-        return
+        log "ERROR: Required OS/Virtualization eligibility file not found: ${virt_os_csv}"
+        log "ERROR: This file must exist in landscape-config directory"
+        exit 1
     fi
     
     # Normalize OS name for comparison
@@ -1195,9 +1522,10 @@ show_usage() {
     echo ""
     echo "This script creates a timestamped subdirectory within the output directory"
     echo "and generates the following files:"
-    echo "  - inspect_output.csv: Main detection results in CSV format"
+    # shellcheck disable=SC2016
+    echo '  - iwdli_output_${HOSTNAME}_${TIMESTAMP}.csv: Main detection results in CSV format'
     echo "  - session.log: Detailed logging of the detection session"
-    echo "  - [command].out/.err: Command outputs when INSPECT_DEBUG=ON"
+    echo "  - [command].out/.err: Command outputs when IWDLI_DEBUG=ON"
     echo ""
     echo "Output parameters include:"
     echo "  - detection_timestamp: ISO 8601 timestamp"
@@ -1214,7 +1542,13 @@ show_usage() {
     echo "  - VIRT_ELIGIBLE: true/false if virtualization is IBM-eligible"
     echo ""
     echo "Environment variables:"
-    echo "  INSPECT_DEBUG=ON   Enable debug logging and command output capture"
+    echo "  IWDLI_DEBUG=ON          Enable debug logging and command output capture"
+    echo "  IWDLI_CONFIG_DIR=path   Set custom configuration directory location"
+    echo "                          (default: parent directory of script location)"
+    echo "  IWDLI_DATA_DIR=path     Set custom data output directory location"
+    echo "                          (default: ./detection-output or first argument)"
+    echo "  IWDLI_HOME=path         Set inspector home directory"
+    echo "                          (default: ~/iwdli for user installations)"
     echo ""
     echo "Supported platforms:"
     echo "  - AIX (PowerVM detection)"
@@ -1237,12 +1571,18 @@ load_node_config() {
     # Look for hostname-specific configuration in landscape-config directory
     # First try the script directory's parent for landscape-config
     landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
-    if [ ! -d "$landscape_config_dir" ]; then
+    
+    # If IWDLI_CONFIG_DIR is set, use that instead
+    if [ -n "$CONFIG_BASE_DIR" ] && [ "$CONFIG_BASE_DIR" != "$(dirname "$SCRIPT_DIR")" ]; then
+        landscape_config_dir="${CONFIG_BASE_DIR}/landscape-config"
+        logD "Using custom landscape-config directory: ${landscape_config_dir}"
+    fi
+    if [ ! -d "${landscape_config_dir}" ]; then
         # Fall back to script directory itself for backward compatibility
         landscape_config_dir="$SCRIPT_DIR"
-        logD "Using fallback configuration directory: $landscape_config_dir"
+        logD "Using fallback configuration directory: ${landscape_config_dir}"
     else
-        logD "Using landscape configuration directory: $landscape_config_dir"
+        logD "Using landscape configuration directory: ${landscape_config_dir}"
     fi
     
     # Look for hostname-specific directory
@@ -1297,31 +1637,250 @@ load_node_config() {
     fi
 }
 
-# Function to detect running webMethods products
-detect_products() {
-    # Look for product detection config in landscape-config first, then fall back to script directory
-    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
-    if [ -f "$landscape_config_dir/product-detection-config.csv" ]; then
-        product_config_file="$landscape_config_dir/product-detection-config.csv"
-        logD "Using landscape product detection config: $product_config_file"
-    else
-        product_config_file="${SCRIPT_DIR}/product-detection-config.csv"
-        logD "Using local product detection config: $product_config_file"
+# Function to get IBM product code for a given product mnemonic
+# Usage: get_product_code <product_mnemo_id>
+# Returns: IBM product code or "UNKNOWN" if not found
+get_product_code() {
+    local product_mnemo="$1"
+    local landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
+    local product_codes_file="${landscape_config_dir}/product-codes.csv"
+    
+    if [ ! -f "$product_codes_file" ]; then
+        log "WARNING: product-codes.csv not found at: $product_codes_file"
+        echo "UNKNOWN"
+        return
     fi
     
-    logD "Starting product detection"
+    # Read CSV and find matching product mnemonic
+    while IFS=',' read -r mnemo_id prod_code prod_name mode terms_id notes || [ -n "$mnemo_id" ]; do
+        # Skip empty lines and header
+        [ -z "$mnemo_id" ] && continue
+        echo "$mnemo_id" | grep "product-mnemo-id" >/dev/null 2>&1 && continue
+        
+        # Remove any leading/trailing whitespace
+        mnemo_id=$(echo "$mnemo_id" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        prod_code=$(echo "$prod_code" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        if [ "$mnemo_id" = "$product_mnemo" ]; then
+            echo "$prod_code"
+            return
+        fi
+    done < "$product_codes_file"
+    
+    # Not found
+    echo "UNKNOWN"
+}
+
+# Function to detect product installations on disk
+# This function searches the filesystem for product installation directories
+# and filters for substantive installations (> 1KB size)
+# POSIX-compliant version - works on Solaris, AIX, and Linux
+#
+# Arguments:
+#   $1 - product_id: Product mnemonic identifier (e.g., "IS_ONP_PRD")
+#   $2 - folder_name: Directory name to search for (e.g., "IntegrationServer")
+#   $3 - exclude_pattern: Optional grep pattern to exclude false positives
+#
+# Returns via global variables:
+#   DETECT_INSTALL_STATUS: "installed" or "not-installed"
+#   DETECT_INSTALL_COUNT: Number of installations found (integer)
+#   DETECT_INSTALL_PATHS: Semicolon-separated list of installation paths
+#
+detect_product_installations() {
+    local product_id="$1"
+    local folder_name="$2"
+    local exclude_pattern="$3"
+    
+    # Default search paths - /app is primary installation location for webMethods
+    # IWDLI_SEARCH_PATHS should be space-separated directory paths
+    local search_paths="${IWDLI_SEARCH_PATHS:-/app /opt /usr/local /home}"
+    
+    logD "=== Starting disk-based detection ==="
+    logD "Product ID: ${product_id}"
+    logD "Folder name: ${folder_name}"
+    logD "Exclude pattern: ${exclude_pattern:-<none>}"
+    logD "Search paths: ${search_paths}"
+    
+    # Initialize result variables
+    local found_paths=""
+    local found_count=0
+    
+    # Determine platform-specific du command options and size threshold
+    local du_opts="-s"
+    local size_threshold=2
+    
+    case "$OS_NAME" in
+        "AIX")
+            # AIX du uses 512-byte blocks, threshold > 2 blocks (~1KB)
+            du_opts="-s"
+            size_threshold=2
+            ;;
+        "Solaris")
+            # Solaris du uses 512-byte blocks
+            du_opts="-s"
+            size_threshold=2
+            ;;
+        *)
+            # Linux - try -sk for kilobyte output
+            if du -sk /tmp >/dev/null 2>&1; then
+                du_opts="-sk"
+                size_threshold=1
+            else
+                # Fallback for systems without -k option
+                du_opts="-s"
+                size_threshold=2
+            fi
+            ;;
+    esac
+    
+    logD "Using du options: ${du_opts}, size threshold: ${size_threshold}"
+    
+    # Use temporary file to collect results (avoids subshell variable issues)
+    local temp_results="${SESSION_DIR}/disk_detect_${product_id}_$$.tmp"
+    
+    # Process each search path
+    for search_path in $search_paths; do
+        # Check if search path exists and is accessible
+        if [ ! -d "$search_path" ]; then
+            logD "Skipping non-existent search path: ${search_path}"
+            continue
+        fi
+        
+        if [ ! -r "$search_path" ]; then
+            logD "Skipping non-readable search path: ${search_path}"
+            continue
+        fi
+        
+        logD "Searching in: ${search_path}"
+        
+        # Calculate base depth (count slashes in search path)
+        # Using tr to count slashes - POSIX-compliant and works on all platforms
+        base_slashes=$(echo "$search_path" | tr -cd '/' | wc -c)
+        
+        # Find all matching directories - POSIX compliant (no -maxdepth)
+        # Filter results manually by depth
+        find "$search_path" -type d -name "$folder_name" 2>/dev/null | while IFS= read -r found_dir; do
+            # Skip empty lines
+            [ -z "$found_dir" ] && continue
+            
+            # Calculate directory depth using slash count
+            dir_slashes=$(echo "$found_dir" | tr -cd '/' | wc -c)
+            rel_depth=$((dir_slashes - base_slashes))
+            
+            # Skip if too deep (depth > 5)
+            if [ $rel_depth -gt 5 ]; then
+                logD "Skipping (too deep - level $rel_depth): ${found_dir}"
+                continue
+            fi
+            
+            # Apply exclusion pattern if specified
+            if [ -n "$exclude_pattern" ]; then
+                if echo "$found_dir" | grep -q "$exclude_pattern"; then
+                    logD "Skipping (excluded): ${found_dir}"
+                    continue
+                fi
+            fi
+            
+            # Check directory size - must be substantive (> threshold)
+            # shellcheck disable=SC2086
+            dir_size=$(du $du_opts "$found_dir" 2>/dev/null | awk '{print $1}')
+            
+            # Validate size is numeric and above threshold
+            if [ -z "$dir_size" ]; then
+                logD "Skipping (cannot determine size): ${found_dir}"
+                continue
+            fi
+            
+            # Compare size using shell arithmetic
+            if [ "$dir_size" -le "$size_threshold" ]; then
+                logD "Skipping (too small - ${dir_size} blocks): ${found_dir}"
+                continue
+            fi
+            
+            # Valid installation found - save to temp file
+            echo "$found_dir" >> "$temp_results"
+            logD "  Found installation: ${found_dir} (depth: ${rel_depth}, size: ${dir_size})"
+        done
+    done
+    
+    # Process collected results from temp file
+    if [ -f "$temp_results" ]; then
+        # Count installations (wc -l may have leading spaces, trim them)
+        found_count=$(wc -l < "$temp_results" 2>/dev/null | sed 's/^[[:space:]]*//')
+        
+        # Build semicolon-separated path list
+        # Use simple shell loop compatible with old Bourne shell
+        # Note: IFS= as inline assignment with read doesn't work on Solaris 5.8 /bin/sh
+        found_paths=""
+        OLD_IFS="$IFS"
+        IFS=""
+        while read -r install_path; do
+            if [ -z "$found_paths" ]; then
+                found_paths="$install_path"
+            else
+                found_paths="${found_paths};${install_path}"
+            fi
+        done < "$temp_results"
+        IFS="$OLD_IFS"
+        
+        # Clean up temp file
+        rm -f "$temp_results"
+    else
+        found_count=0
+        found_paths=""
+    fi
+    
+    # Set global return variables based on results
+    if [ $found_count -gt 0 ]; then
+        DETECT_INSTALL_STATUS="installed"
+        DETECT_INSTALL_COUNT=$found_count
+        DETECT_INSTALL_PATHS="$found_paths"
+        log "Disk detection complete for ${product_id}: ${found_count} installation(s) found"
+    else
+        DETECT_INSTALL_STATUS="not-installed"
+        DETECT_INSTALL_COUNT=0
+        DETECT_INSTALL_PATHS=""
+        logD "Disk detection complete for ${product_id}: No installations found"
+    fi
+    
+    logD "=== Disk-based detection complete ==="
+    logD "Status: ${DETECT_INSTALL_STATUS}"
+    logD "Count: ${DETECT_INSTALL_COUNT}"
+    logD "Paths: ${DETECT_INSTALL_PATHS}"
+}
+
+# Function to detect running webMethods products
+detect_products() { 
+    # Load product detection config from landscape-config (required)
+    landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
+    product_config_file="${landscape_config_dir}/product-detection-config.csv"
+    
+    logD "Starting product detection using: ${product_config_file}"
     
     if [ ! -f "$product_config_file" ]; then
-        logD "Product detection config file not found: $product_config_file"
-        return 1
+        log "ERROR: Required product detection config file not found: $product_config_file"
+        log "ERROR: This file must exist in landscape-config directory"
+        exit 1
     fi
     
     # Load node configuration to determine PROD/NON_PROD
     load_node_config
     
     # If debug mode is on, capture the full process listing once before filtering
-    if [ "$INSPECT_DEBUG" = "ON" ]; then
-        case "$OS_NAME" in
+    if [ "${IWDLI_DEBUG}" = "ON" ]; then
+
+        logD "Capturing \"ps -ef\" ---"
+        ps -ef > "${SESSION_DIR}/c_ps-ef.out" 2>"${SESSION_DIR}/c_ps-ef.err"
+
+        logD "Capturing \"ps auxww\" ---"
+        ps -ef > "${SESSION_DIR}/c_ps_auxww.out" 2>"${SESSION_DIR}/c_ps_auxww.err"
+
+        if [ -x /bin/ucb/ps ]; then
+            logD "Capturing \"ps auxww\" ---"
+            /usr/ucb/ps -ef > "${SESSION_DIR}/c_ucb_ps_auxww.out" 2>"${SESSION_DIR}/c_ucb_ps_auxww.err"
+        fi
+
+        case "${OS_NAME}" in
             "AIX"|"Solaris")
                 ps -ef > "${SESSION_DIR}/ps-ef.out" 2>"${SESSION_DIR}/ps-ef.err"
                 logD "Full process list captured: ${SESSION_DIR}/ps-ef.out"
@@ -1335,13 +1894,18 @@ detect_products() {
     fi
     
     # Skip header line and process each product detection rule
-    while IFS=',' read -r grep_pattern prod_id nonprod_id process_type notes || [ -n "$grep_pattern" ]; do
+    while IFS=',' read -r grep_pattern prod_id nonprod_id process_type disk_search_enabled disk_folder_name disk_exclude_pattern notes || [ -n "$grep_pattern" ]; do
         # Skip empty lines and comments
         [ -z "$grep_pattern" ] && continue
-        echo "$grep_pattern" | grep -q '^#' && continue
+        echo "$grep_pattern" | grep '^#' >/dev/null 2>&1 && continue
         [ "$grep_pattern" = "process-grep-pattern" ] && continue  # Skip header
         
-        logD "Checking for product pattern: $grep_pattern (type: $process_type)"
+        logD "Processing product detection rule:"
+        logD "  Pattern: $grep_pattern"
+        logD "  Process type: $process_type"
+        logD "  Disk search: ${disk_search_enabled:-<not set>}"
+        logD "  Disk folder: ${disk_folder_name:-<not set>}"
+        logD "  Exclude pattern: ${disk_exclude_pattern:-<not set>}"
         
         # Determine which product ID to use based on node type
         if [ "$NODE_TYPE" = "NON_PROD" ]; then
@@ -1350,24 +1914,30 @@ detect_products() {
             product_id="$prod_id"
         fi
         
+        logD "Using product ID: ${product_id} (Node type: ${NODE_TYPE})"
+        
+        # ========================================
+        # PART 1: Process-based detection (existing functionality)
+        # ========================================
+        
         # Check if any processes match the pattern
         found="false"
         
         # Use different process inspection methods based on OS
         case "$OS_NAME" in
             "AIX")
-                if ps -ef | grep -v grep | grep -q "$grep_pattern"; then
+                if ps -ef | grep -v grep | grep "$grep_pattern" >/dev/null 2>&1; then
                     found="true"
                 fi
                 ;;
             "Solaris")
-                if ps -ef | grep -v grep | grep -q "$grep_pattern"; then
+                if ps -ef | grep -v grep | grep "$grep_pattern" >/dev/null 2>&1; then
                     found="true"
                 fi
                 ;;
             *)
                 # Linux and others
-                if ps aux | grep -v grep | grep -q "$grep_pattern"; then
+                if ps aux | grep -v grep | grep "$grep_pattern" >/dev/null 2>&1; then
                     found="true"
                 fi
                 ;;
@@ -1375,10 +1945,16 @@ detect_products() {
         
         if [ "$found" = "true" ]; then
             logD "Found running process for product: $product_id (note: $notes)"
+            
+            # Get IBM product code mapping
+            ibm_product_code=$(get_product_code "$product_id")
+            logD "Product $product_id maps to IBM code: $ibm_product_code"
+            
             write_csv "$product_id" "present"
+            write_csv "${product_id}_IBM_PRODUCT_CODE" "$ibm_product_code"
             
             # If debug mode is on, capture the specific grep results for this product
-            if [ "$INSPECT_DEBUG" = "ON" ]; then
+            if [ "$IWDLI_DEBUG" = "ON" ]; then
                 debug_file="${SESSION_DIR}/processes_${product_id}.out"
                 case "$OS_NAME" in
                     "AIX"|"Solaris")
@@ -1393,11 +1969,44 @@ detect_products() {
         else
             logD "No running process found for pattern: $grep_pattern"
             write_csv "$product_id" "absent"
+            write_csv "${product_id}_IBM_PRODUCT_CODE" "N/A"
+        fi
+        
+        # ========================================
+        # PART 2: Disk-based installation detection (NEW)
+        # ========================================
+        
+        # Check if disk-based detection is enabled for this product
+        if [ "$disk_search_enabled" = "yes" ] && [ -n "$disk_folder_name" ]; then
+            logD "Disk-based detection enabled for ${product_id}"
+            
+            # Call disk detection function
+            detect_product_installations "$product_id" "$disk_folder_name" "$disk_exclude_pattern"
+            
+            # Write disk detection results to CSV
+            write_csv "${product_id}_INSTALL_STATUS" "$DETECT_INSTALL_STATUS"
+            write_csv "${product_id}_INSTALL_COUNT" "$DETECT_INSTALL_COUNT"
+            
+            # Handle paths - escape or sanitize if needed
+            if [ -n "$DETECT_INSTALL_PATHS" ]; then
+                write_csv "${product_id}_INSTALL_PATHS" "$DETECT_INSTALL_PATHS"
+            else
+                write_csv "${product_id}_INSTALL_PATHS" ""
+            fi
+            
+            logD "Disk detection results written for ${product_id}"
+        else
+            logD "Disk-based detection NOT enabled for ${product_id} (disk_search_enabled=${disk_search_enabled:-<empty>})"
+            
+            # Write N/A values for disk detection fields if not enabled
+            write_csv "${product_id}_INSTALL_STATUS" "disabled"
+            write_csv "${product_id}_INSTALL_COUNT" "0"
+            write_csv "${product_id}_INSTALL_PATHS" ""
         fi
         
     done < "$product_config_file"
     
-    logD "Product detection completed"
+    logD "Product detection completed (process and disk)"
 }
 
 # Main execution
@@ -1406,13 +2015,26 @@ main() {
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     logD "Script directory: ${SCRIPT_DIR}"
     
-    # Set output directory - use first argument or default
+    # Set configuration directory from environment or use default (parent of script dir)
+    # This allows code upgrades without touching data/config
+    if [ -n "${IWDLI_CONFIG_DIR}" ]; then
+        CONFIG_BASE_DIR="${IWDLI_CONFIG_DIR}"
+        logD "Using config directory from IWDLI_CONFIG_DIR: ${CONFIG_BASE_DIR}"
+    else
+        CONFIG_BASE_DIR="$(dirname "$SCRIPT_DIR")"
+        logD "Using default config directory (parent of script dir): ${CONFIG_BASE_DIR}"
+    fi
+    
+    # Set output directory from environment, command line argument, or default
     if [ -n "$1" ]; then
         if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
             show_usage
             exit 0
         fi
         OUTPUT_DIR="$1"
+    elif [ -n "$IWDLI_DATA_DIR" ]; then
+        OUTPUT_DIR="$IWDLI_DATA_DIR"
+        logD "Using output directory from IWDLI_DATA_DIR: ${OUTPUT_DIR}"
     else
         OUTPUT_DIR="./detection-output"
     fi
@@ -1422,20 +2044,29 @@ main() {
     SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}"
     
     # Create directories if they don't exist
-    mkdir -p "$SESSION_DIR" || {
-        echo "Error: Cannot create session directory: $SESSION_DIR" >&2
+    mkdir -p "${SESSION_DIR}" || {
+        echo "Error: Cannot create session directory: ${SESSION_DIR}" >&2
         exit 1
     }
     
+    local hostname_short
+    # shellcheck disable=SC3028
+    hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
     # Set output file and session log
-    OUTPUT_FILE="${SESSION_DIR}/inspect_output.csv"
-    SESSION_LOG="${SESSION_DIR}/session.log"
+    OUTPUT_FILE="${SESSION_DIR}/../iwdli_output_${hostname_short}_${TIMESTAMP}.csv"
+    SESSION_LOG="${SESSION_DIR}/iwdli_session.log"
     
     # Initialize session log
-    echo "=== System Detection Session Started ===" > "$SESSION_LOG"
+    echo "=== System Detection Session Started ===" >> "$SESSION_LOG"
     echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
     echo "Session Directory: $SESSION_DIR" >> "$SESSION_LOG"
-    echo "Debug Mode: ${INSPECT_DEBUG:-OFF}" >> "$SESSION_LOG"
+    echo "Script Directory: $SCRIPT_DIR" >> "$SESSION_LOG"
+    echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$SESSION_LOG"
+    echo "Output Directory: ${OUTPUT_DIR}" >> "$SESSION_LOG"
+    echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$SESSION_LOG"
+    echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$SESSION_LOG"
+    echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$SESSION_LOG"
+    echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$SESSION_LOG"
     echo "=========================================" >> "$SESSION_LOG"
     echo "" >> "$SESSION_LOG"
     
@@ -1457,6 +2088,9 @@ main() {
     
     # Detect host/physical CPU information for licensing calculations
     detect_host_physical_cpus
+    
+    # Detect physical host identifier for VM aggregation
+    detect_physical_host_id
     
     # Check eligibility
     check_processor_eligibility

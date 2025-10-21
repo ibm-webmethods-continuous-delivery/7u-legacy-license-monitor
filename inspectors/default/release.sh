@@ -9,6 +9,11 @@
 #
 # This script creates a tar.gz file containing all necessary files for
 # deployment to target systems.
+#
+# NOTE: For production deployments, consider separating code and configuration:
+#   - Code: common/, test.sh, documentation
+#   - Config: landscape-config/ (CSV files, node configs)
+# This allows configuration updates without code changes.
 
 set -e
 
@@ -28,7 +33,7 @@ echo ""
 
 # Check required files exist
 echo "Checking required files..."
-required_files="common/detect_system_info.sh test_enhanced_script.sh"
+required_files="common/detect_system_info.sh test.sh"
 repo_root_files="../../README.md ../../REQUIREMENTS.md"
 missing_files=""
 
@@ -81,7 +86,7 @@ cp -r common "$TEMP_DIR/"
 cp -r landscape-config "$TEMP_DIR/"
 
 # Copy inspector files
-cp test_enhanced_script.sh "$TEMP_DIR/"
+cp test.sh "${TEMP_DIR}/"
 
 # Copy repository root files
 cp ../../README.md "$TEMP_DIR/"
@@ -136,7 +141,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "Installing files..."
 cp -r "$SCRIPT_DIR/common" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/landscape-config" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/test_enhanced_script.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/test.sh" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
 
 # Copy license if exists
@@ -146,14 +151,14 @@ fi
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR/common/detect_system_info.sh"
-chmod +x "$INSTALL_DIR/test_enhanced_script.sh"
+chmod +x "$INSTALL_DIR/test.sh"
 
 echo ""
 echo "Installation completed successfully!"
 echo ""
 echo "Installation directory: $INSTALL_DIR"
 echo "Main script: $INSTALL_DIR/common/detect_system_info.sh"
-echo "Test script: $INSTALL_DIR/test_enhanced_script.sh"
+echo "Test script: $INSTALL_DIR/test.sh"
 echo ""
 echo "To run the inspector:"
 echo "  cd $INSTALL_DIR"
@@ -161,7 +166,7 @@ echo "  ./common/detect_system_info.sh output-directory"
 echo ""
 echo "To run tests:"
 echo "  cd $INSTALL_DIR"
-echo "  ./test_enhanced_script.sh"
+echo "  ./test.sh"
 echo ""
 echo "Configuration:"
 echo "- Node-specific config: $INSTALL_DIR/landscape-config/<hostname>/"
