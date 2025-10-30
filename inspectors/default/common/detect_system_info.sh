@@ -17,7 +17,7 @@
 # Author: Generated and refined by Mihai Ungureanu
 # Date: September 16, 2025
 
-# shellcheck disable=SC3043
+# shellcheck disable=SC3043,SC2129
 
 set -e
 
@@ -129,6 +129,27 @@ run_debug_cmd() {
     # Regular execution without debug capture
     eval "$1"
   fi
+}
+
+# Function to log all session information (computed constants and environment)
+log_session_info() {
+  logD "=== Session Information ==="
+  logD "Environment variables:"
+  logD "  IWDLI_DEBUG=${IWDLI_DEBUG}"
+  logD "  IWDLI_HOME=${IWDLI_HOME}"
+  logD "  IWDLI_AUDIT_DIR=${IWDLI_AUDIT_DIR}"
+  logD "  IWDLI_DATA_DIR=${IWDLI_DATA_DIR}"
+  logD "  IWDLI_DETECTION_CONFIG_DIR=${IWDLI_DETECTION_CONFIG_DIR}"
+  logD "  IWDLI_LANDSCAPE_CONFIG_DIR=${IWDLI_LANDSCAPE_CONFIG_DIR}"
+  logD "Session constants:"
+  logD "  iwdli_session_timestamp=${iwdli_session_timestamp}"
+  logD "  iwdli_session_audit_dir=${iwdli_session_audit_dir}"
+  logD "  iwdli_session_log=${iwdli_session_log}"
+  logD "  hostname_short=${hostname_short}"
+  logD "  iwdli_output_file=${iwdli_output_file}"
+  logD "Script variables:"
+  logD "  SCRIPT_DIR=${SCRIPT_DIR:-<not yet set>}"
+  logD "==========================="
 }
 
 # Function to detect operating system
@@ -1201,8 +1222,7 @@ detect_processor() {
 check_processor_eligibility() {
     PROCESSOR_ELIGIBLE="false"
     # Load processors CSV from landscape-config (required)
-    landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
-    processors_csv="$landscape_config_dir/ibm-eligible-processors.csv"
+    processors_csv="$IWDLI_LANDSCAPE_CONFIG_DIR/ibm-eligible-processors.csv"
     
     logD "Checking processor eligibility using: ${processors_csv}"
     
@@ -1244,8 +1264,7 @@ check_os_virt_eligibility() {
     OS_ELIGIBLE="false"
     VIRT_ELIGIBLE="false"
     # Load virt/OS CSV from landscape-config (required)
-    landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
-    virt_os_csv="$landscape_config_dir/ibm-eligible-virt-and-os.csv"
+    virt_os_csv="$IWDLI_LANDSCAPE_CONFIG_DIR/ibm-eligible-virt-and-os.csv"
     
     logD "Checking OS and virtualization eligibility using: ${virt_os_csv}"
     
@@ -1587,36 +1606,16 @@ show_usage() {
 load_node_config() {
     NODE_TYPE="PROD"  # Default to PROD
     
-    # Get hostname for configuration lookup
-    logD "Detected hostname: $hostname_short"
-    
-    # Look for hostname-specific configuration in landscape-config directory
-    # First try the script directory's parent for landscape-config
-    landscape_config_dir="$(dirname "$SCRIPT_DIR")/landscape-config"
-    
-    # If IWDLI_CONFIG_DIR is set, use that instead
-    if [ -n "$CONFIG_BASE_DIR" ] && [ "$CONFIG_BASE_DIR" != "$(dirname "$SCRIPT_DIR")" ]; then
-        landscape_config_dir="${CONFIG_BASE_DIR}/landscape-config"
-        logD "Using custom landscape-config directory: ${landscape_config_dir}"
-    fi
-    if [ ! -d "${landscape_config_dir}" ]; then
-        # Fall back to script directory itself for backward compatibility
-        landscape_config_dir="$SCRIPT_DIR"
-        logD "Using fallback configuration directory: ${landscape_config_dir}"
-    else
-        logD "Using landscape configuration directory: ${landscape_config_dir}"
-    fi
-    
-    # Look for hostname-specific directory
+    # Look for hostname-specific directory in landscape-config
     host_config_dir=""
-    if [ -d "$landscape_config_dir" ]; then
+    if [ -d "$IWDLI_LANDSCAPE_CONFIG_DIR" ]; then
         # Try exact hostname match first
-        if [ -d "$landscape_config_dir/$hostname_short" ]; then
-            host_config_dir="$landscape_config_dir/$hostname_short"
+        if [ -d "$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short" ]; then
+            host_config_dir="$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short"
             logD "Found exact hostname match: $host_config_dir"
         else
             # Try to find a directory that contains the hostname as substring
-            for dir in "$landscape_config_dir"/*; do
+            for dir in "$IWDLI_LANDSCAPE_CONFIG_DIR"/*; do
                 if [ -d "$dir" ]; then
                     dir_name=$(basename "$dir")
                     # Skip CSV files and hidden directories
@@ -1635,18 +1634,18 @@ load_node_config() {
         fi
     fi
     
-    # Load configuration from host-specific directory or fall back to script directory
+    # Load configuration from host-specific directory or fall back to common location
     node_config_file=""
     if [ -n "$host_config_dir" ] && [ -f "$host_config_dir/node-config.conf" ]; then
         node_config_file="$host_config_dir/node-config.conf"
         logD "Using host-specific configuration: $node_config_file"
-    else
+    elif [ -f "$SCRIPT_DIR/node-config.conf" ]; then
         # Fall back to script directory for backward compatibility
         node_config_file="$SCRIPT_DIR/node-config.conf"
         logD "Using fallback configuration: $node_config_file"
     fi
     
-    if [ -f "$node_config_file" ]; then
+    if [ -n "$node_config_file" ] && [ -f "$node_config_file" ]; then
         logD "Loading node configuration from: $node_config_file"
         # Source the config file to get NODE_TYPE
         # shellcheck source=/dev/null
@@ -1664,8 +1663,7 @@ load_node_config() {
 # Returns: IBM product code or "UNKNOWN" if not found
 get_product_code() {
     local product_mnemo="$1"
-    local landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
-    local product_codes_file="${landscape_config_dir}/product-codes.csv"
+    local product_codes_file="$IWDLI_LANDSCAPE_CONFIG_DIR/product-codes.csv"
     
     if [ ! -f "$product_codes_file" ]; then
         log "WARNING: product-codes.csv not found at: $product_codes_file"
@@ -1874,8 +1872,7 @@ detect_product_installations() {
 # Function to detect running webMethods products
 detect_products() { 
     # Load product detection config from landscape-config (required)
-    landscape_config_dir="${CONFIG_BASE_DIR:-$(dirname "$SCRIPT_DIR")}/landscape-config"
-    product_config_file="${landscape_config_dir}/product-detection-config.csv"
+    product_config_file="$IWDLI_LANDSCAPE_CONFIG_DIR/product-detection-config.csv"
     
     logD "Starting product detection using: ${product_config_file}"
     
@@ -2073,17 +2070,6 @@ detect_products() {
 main() {
     # Determine script directory for CSV file locations
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    logD "Script directory: ${SCRIPT_DIR}"
-    
-    # Set configuration directory from environment or use default (parent of script dir)
-    # This allows code upgrades without touching data/config
-    if [ -n "${IWDLI_CONFIG_DIR}" ]; then
-        CONFIG_BASE_DIR="${IWDLI_CONFIG_DIR}"
-        logD "Using config directory from IWDLI_CONFIG_DIR: ${CONFIG_BASE_DIR}"
-    else
-        CONFIG_BASE_DIR="$(dirname "$SCRIPT_DIR")"
-        logD "Using default config directory (parent of script dir): ${CONFIG_BASE_DIR}"
-    fi
     
     # Handle command line arguments
     if [ -n "$1" ]; then
@@ -2105,17 +2091,18 @@ main() {
         exit 1
     }
     
+    # Log all session information in debug mode
+    log_session_info
+    
     # Initialize session log
     echo "=== System Detection Session Started ===" >> "$iwdli_session_log"
     echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
     echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
     echo "Script Directory: $SCRIPT_DIR" >> "$iwdli_session_log"
-    echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$iwdli_session_log"
     echo "Data Directory: ${IWDLI_DATA_DIR}" >> "$iwdli_session_log"
+    echo "Detection Config Directory: ${IWDLI_DETECTION_CONFIG_DIR}" >> "$iwdli_session_log"
+    echo "Landscape Config Directory: ${IWDLI_LANDSCAPE_CONFIG_DIR}" >> "$iwdli_session_log"
     echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$iwdli_session_log"
-    echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$iwdli_session_log"
-    echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$iwdli_session_log"
-    echo "Audit Dir (env): ${IWDLI_AUDIT_DIR:-<not set>}" >> "$iwdli_session_log"
     echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$iwdli_session_log"
     echo "=========================================" >> "$iwdli_session_log"
     echo "" >> "$iwdli_session_log"
