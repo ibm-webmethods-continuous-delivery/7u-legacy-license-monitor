@@ -37,6 +37,7 @@ iwdli_session_log="${iwdli_session_audit_dir}/iwdli_session.log"
 # shellcheck disable=SC3028
 hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
 iwdli_output_file="${IWDLI_DATA_DIR}/iwdli_output_${hostname_short}_${iwdli_session_timestamp}.csv"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
 
 # Global variables for results
 OS_NAME=""
@@ -62,9 +63,6 @@ HOST_ID_CONFIDENCE=""
 DETECT_INSTALL_STATUS=""
 DETECT_INSTALL_COUNT=""
 DETECT_INSTALL_PATHS=""
-
-# Global variable for script directory (to find CSV files)
-SCRIPT_DIR=""
 
 # Function to write a parameter-value pair to CSV
 write_csv() {
@@ -148,7 +146,7 @@ log_session_info() {
   logD "  hostname_short=${hostname_short}"
   logD "  iwdli_output_file=${iwdli_output_file}"
   logD "Script variables:"
-  logD "  SCRIPT_DIR=${SCRIPT_DIR:-<not yet set>}"
+  logD "  script_dir=${script_dir}"
   logD "==========================="
 }
 
@@ -1604,58 +1602,58 @@ show_usage() {
 
 # Function to load node configuration based on hostname
 load_node_config() {
-    NODE_TYPE="PROD"  # Default to PROD
+  NODE_TYPE="PROD"  # Default to PROD
     
-    # Look for hostname-specific directory in landscape-config
-    host_config_dir=""
-    if [ -d "$IWDLI_LANDSCAPE_CONFIG_DIR" ]; then
-        # Try exact hostname match first
-        if [ -d "$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short" ]; then
-            host_config_dir="$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short"
-            logD "Found exact hostname match: $host_config_dir"
-        else
-            # Try to find a directory that contains the hostname as substring
-            for dir in "$IWDLI_LANDSCAPE_CONFIG_DIR"/*; do
-                if [ -d "$dir" ]; then
-                    dir_name=$(basename "$dir")
-                    # Skip CSV files and hidden directories
-                    case "$dir_name" in
-                        *.csv|.*) continue ;;
-                    esac
-                    # Check if hostname appears in directory name
-                    case "$dir_name" in
-                        *"$hostname_short"*) 
-                            host_config_dir="$dir"
-                            logD "Found hostname substring match: $host_config_dir"
-                            break ;;
-                    esac
-                fi
-            done
-        fi
-    fi
-    
-    # Load configuration from host-specific directory or fall back to common location
-    node_config_file=""
-    if [ -n "$host_config_dir" ] && [ -f "$host_config_dir/node-config.conf" ]; then
-        node_config_file="$host_config_dir/node-config.conf"
-        logD "Using host-specific configuration: $node_config_file"
-    elif [ -f "$SCRIPT_DIR/node-config.conf" ]; then
-        # Fall back to script directory for backward compatibility
-        node_config_file="$SCRIPT_DIR/node-config.conf"
-        logD "Using fallback configuration: $node_config_file"
-    fi
-    
-    if [ -n "$node_config_file" ] && [ -f "$node_config_file" ]; then
-        logD "Loading node configuration from: $node_config_file"
-        # Source the config file to get NODE_TYPE
-        # shellcheck source=/dev/null
-        . "$node_config_file" 2>/dev/null || {
-            logD "Warning: Could not source node configuration file"
-        }
-        logD "Node type set to: $NODE_TYPE"
+  # Look for hostname-specific directory in landscape-config
+  host_config_dir=""
+  if [ -d "$IWDLI_LANDSCAPE_CONFIG_DIR" ]; then
+    # Try exact hostname match first
+    if [ -d "$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short" ]; then
+      host_config_dir="$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short"
+      logD "Found exact hostname match: $host_config_dir"
     else
-        logD "Node configuration file not found, using default: $NODE_TYPE"
+      # Try to find a directory that contains the hostname as substring
+      for dir in "$IWDLI_LANDSCAPE_CONFIG_DIR"/*; do
+        if [ -d "$dir" ]; then
+          dir_name=$(basename "$dir")
+          # Skip CSV files and hidden directories
+          case "$dir_name" in
+            *.csv|.*) continue ;;
+          esac
+          # Check if hostname appears in directory name
+          case "$dir_name" in
+            *"$hostname_short"*) 
+              host_config_dir="$dir"
+              logD "Found hostname substring match: $host_config_dir"
+              break ;;
+          esac
+        fi
+      done
     fi
+  fi
+    
+  # Load configuration from host-specific directory or fall back to common location
+  node_config_file=""
+  if [ -n "$host_config_dir" ] && [ -f "$host_config_dir/node-config.conf" ]; then
+    node_config_file="$host_config_dir/node-config.conf"
+    logD "Using host-specific configuration: $node_config_file"
+  elif [ -f "$script_dir/node-config.conf" ]; then
+    # Fall back to script directory for backward compatibility
+    node_config_file="$script_dir/node-config.conf"
+    logD "Using fallback configuration: $node_config_file"
+  fi
+    
+  if [ -n "$node_config_file" ] && [ -f "$node_config_file" ]; then
+    logD "Loading node configuration from: $node_config_file"
+    # Source the config file to get NODE_TYPE
+    # shellcheck source=/dev/null
+    . "$node_config_file" 2>/dev/null || {
+      logD "Warning: Could not source node configuration file"
+    }
+    logD "Node type set to: $NODE_TYPE"
+  else
+    logD "Node configuration file not found, using default: $NODE_TYPE"
+  fi
 }
 
 # Function to get IBM product code for a given product mnemonic
@@ -2068,9 +2066,6 @@ detect_products() {
 
 # Main execution
 main() {
-    # Determine script directory for CSV file locations
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    
     # Handle command line arguments
     if [ -n "$1" ]; then
         if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -2098,7 +2093,7 @@ main() {
     echo "=== System Detection Session Started ===" >> "$iwdli_session_log"
     echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
     echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
-    echo "Script Directory: $SCRIPT_DIR" >> "$iwdli_session_log"
+    echo "Script Directory: $script_dir" >> "$iwdli_session_log"
     echo "Data Directory: ${IWDLI_DATA_DIR}" >> "$iwdli_session_log"
     echo "Detection Config Directory: ${IWDLI_DETECTION_CONFIG_DIR}" >> "$iwdli_session_log"
     echo "Landscape Config Directory: ${IWDLI_LANDSCAPE_CONFIG_DIR}" >> "$iwdli_session_log"
