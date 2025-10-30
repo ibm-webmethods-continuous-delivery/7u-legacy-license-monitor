@@ -34,6 +34,8 @@ iwdli_session_timestamp=$(date -u '+%Y-%m-%d_%H%M%S')
 iwdli_session_audit_dir=${IWDLI_SESSION_AUDIT_DIR:-${IWDLI_AUDIT_DIR}/${iwdli_session_timestamp}}
 # note that user MAY provide a IWDLI_SESSION_AUDIT_DIR folder if they want to keep the audit files in an upfront defined folder
 iwdli_session_log="${iwdli_session_audit_dir}/iwdli_session.log"
+hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
+iwdli_output_file="${IWDLI_DATA_DIR}/iwdli_output_${hostname_short}_${iwdli_session_timestamp}.csv"
 
 # Global variables for results
 OS_NAME=""
@@ -60,18 +62,12 @@ DETECT_INSTALL_STATUS=""
 DETECT_INSTALL_COUNT=""
 DETECT_INSTALL_PATHS=""
 
-# Global variable for output file
-OUTPUT_FILE=""
-
 # Global variable for script directory (to find CSV files)
 SCRIPT_DIR=""
 
-# Script internal variables (initialized in main)
-OUTPUT_FILE=""
-
 # Function to write a parameter-value pair to CSV
 write_csv() {
-  echo "$1,$2" >> "$OUTPUT_FILE"
+  echo "$1,$2" >> "$iwdli_output_file"
   logD "CSV: $1=$2"
 }
 
@@ -1575,7 +1571,6 @@ load_node_config() {
     NODE_TYPE="PROD"  # Default to PROD
     
     # Get hostname for configuration lookup
-    hostname_short=$(hostname 2>/dev/null || echo "unknown")
     logD "Detected hostname: $hostname_short"
     
     # Look for hostname-specific configuration in landscape-config directory
@@ -2087,26 +2082,11 @@ main() {
         exit 1
     }
     
-    # Determine output data directory (for CSV file)
-    local output_data_dir
-    if [ -n "$IWDLI_DATA_DIR" ]; then
-        output_data_dir="$IWDLI_DATA_DIR"
-        logD "Using output directory from IWDLI_DATA_DIR: ${output_data_dir}"
-    else
-        output_data_dir="./detection-output"
-    fi
-    
     # Create data directory if it doesn't exist
-    mkdir -p "${output_data_dir}" || {
-        echo "Error: Cannot create data directory: ${output_data_dir}" >&2
+    mkdir -p "${IWDLI_DATA_DIR}" || {
+        echo "Error: Cannot create data directory: ${IWDLI_DATA_DIR}" >&2
         exit 1
     }
-    
-    local hostname_short
-    # shellcheck disable=SC3028
-    hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
-    # Set output CSV file in data directory
-    OUTPUT_FILE="${output_data_dir}/iwdli_output_${hostname_short}_${iwdli_session_timestamp}.csv"
     
     # Initialize session log
     echo "=== System Detection Session Started ===" >> "$iwdli_session_log"
@@ -2114,7 +2094,7 @@ main() {
     echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
     echo "Script Directory: $SCRIPT_DIR" >> "$iwdli_session_log"
     echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$iwdli_session_log"
-    echo "Output Data Directory: ${output_data_dir}" >> "$iwdli_session_log"
+    echo "Data Directory: ${IWDLI_DATA_DIR}" >> "$iwdli_session_log"
     echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$iwdli_session_log"
     echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$iwdli_session_log"
     echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$iwdli_session_log"
@@ -2125,11 +2105,11 @@ main() {
     
     log "Starting system detection"
     log "Session audit directory: ${iwdli_session_audit_dir}"
-    log "Output file: ${OUTPUT_FILE}"
+    log "Output file: ${iwdli_output_file}"
     log "Session log: ${iwdli_session_log}"
     
     # Create CSV file with header
-    echo "Parameter,Value" > "$OUTPUT_FILE"
+    echo "Parameter,Value" > "$iwdli_output_file"
     write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     write_csv "session_audit_directory" "$iwdli_session_audit_dir"
     
@@ -2155,7 +2135,7 @@ main() {
     # Detect running webMethods products
     detect_products
     
-    log "Detection complete. Results written to: ${OUTPUT_FILE}"
+    log "Detection complete. Results written to: ${iwdli_output_file}"
     log "Session log available at: ${iwdli_session_log}"
     
     # Final session log entry
