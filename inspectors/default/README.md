@@ -45,8 +45,11 @@ Debug mode creates additional trace files including full process listings and co
 # Set inspector home directory
 export IWDLI_HOME=~/iwdli
 
-# Set custom configuration directory (for code/config separation)
-export IWDLI_CONFIG_DIR=/opt/inspector-config
+# Set custom detection configuration directory (contract-level, fixed per deployment)
+export IWDLI_DETECTION_CONFIG_DIR=/opt/inspector-detection-config
+
+# Set custom landscape configuration directory (per environment)
+export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/inspector-landscape-config
 
 # Set custom data output directory
 export IWDLI_DATA_DIR=/var/data/inspector-output
@@ -65,14 +68,25 @@ The inspector supports the following environment variables for flexible deployme
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `IWDLI_DEBUG` | `OFF` | Set to `ON` to enable debug logging and capture detailed command outputs |
-| `IWDLI_HOME` | `~/iwdli` | Inspector home directory (used as default installation location) |
-| `IWDLI_CONFIG_DIR` | Parent directory of script | Custom location for configuration files (landscape-config directory) |
-| `IWDLI_DATA_DIR` | `./detection-output` | Custom location for detection output data |
+| `IWDLI_HOME` | `/tmp/iwdli-home` | Inspector home directory (used as base for default paths) |
+| `IWDLI_AUDIT_DIR` | `$IWDLI_HOME/audit` | Directory for audit logs and session logs |
+| `IWDLI_DATA_DIR` | `$IWDLI_HOME/data` | Directory for CSV output files |
+| `IWDLI_DETECTION_CONFIG_DIR` | `$IWDLI_HOME/detection-config` | Contract-level configuration (eligibility CSVs, product codes) |
+| `IWDLI_LANDSCAPE_CONFIG_DIR` | `$IWDLI_HOME/landscape-config` | Environment-specific configuration (hostname configs) |
 
 **Variable Naming Convention:**
 - All inspector environment variables use the `IWDLI_` prefix
 - IWDLI stands for "IBM webMethods Default License Inspector"
 - This prevents interference with other applications' environment variables
+
+**Configuration Directory Separation:**
+- **Detection Config** (`IWDLI_DETECTION_CONFIG_DIR`): Contract-level configuration that rarely changes
+  - IBM eligibility reference files (processors, OS, virtualization)
+  - Product code mappings
+  - Detection patterns
+- **Landscape Config** (`IWDLI_LANDSCAPE_CONFIG_DIR`): Environment-specific configuration
+  - Hostname-specific node configurations
+  - Varies per deployment landscape
 
 **Benefits of Environment Variables:**
 - **Code/Config/Data Separation**: Upgrade inspector code without touching configuration or historical data
@@ -139,15 +153,30 @@ The inspector follows a clean separation of concerns:
 - Shell scripts that perform detection
 - Minimal, upgradeable without touching configuration or data
 
-**Configuration** (configurable via `IWDLI_CONFIG_DIR`):
-- `landscape-config/`: Reference CSV files and node configurations
-- Default: Parent directory of script location
-- Can be set to shared location for centralized management
+**Detection Configuration** (configurable via `IWDLI_DETECTION_CONFIG_DIR`):
+- Contract-level configuration files (fixed per customer deployment)
+- `ibm-eligible-processors.csv`: IBM's eligible processor list
+- `ibm-eligible-virt-and-os.csv`: IBM's eligible OS/virtualization combinations
+- `product-codes.csv`: Product code mappings
+- `product-detection-config.csv`: Process detection patterns
+- Default: `$IWDLI_HOME/detection-config`
+- Shared across all environments within same contract
+
+**Landscape Configuration** (configurable via `IWDLI_LANDSCAPE_CONFIG_DIR`):
+- Environment-specific configuration files (varies per landscape)
+- `<hostname>/node-config.conf`: Host-specific node configuration
+- Default: `$IWDLI_HOME/landscape-config`
+- Can be set to different location for each environment
 
 **Data** (configurable via `IWDLI_DATA_DIR`):
-- Detection output with timestamped session directories
-- Default: `./detection-output` (relative to current directory)
+- Detection output with timestamped CSV files
+- Default: `$IWDLI_HOME/data`
 - Should be on persistent storage, separate from code
+
+**Audit Logs** (configurable via `IWDLI_AUDIT_DIR`):
+- Session logs and debug outputs
+- Default: `$IWDLI_HOME/audit`
+- Timestamped session directories for each execution
 
 **Example Deployment:**
 ```bash
@@ -155,25 +184,34 @@ The inspector follows a clean separation of concerns:
 /opt/iwl/default-inspector/
   └── common/detect_system_info.sh
 
-# Centralized configuration (shared, versioned)
-/opt/iwl/default-inspector/
-  └── landscape-config/
-      ├── ibm-eligible-processors.csv
-      ├── ibm-eligible-virt-and-os.csv
-      ├── product-detection-config.csv
-      ├── product-codes.csv
-      └── <hostname>/
-          └── node-config.conf
+# Detection configuration (contract-level, shared across environments)
+/opt/iwl/detection-config/
+  ├── ibm-eligible-processors.csv
+  ├── ibm-eligible-virt-and-os.csv
+  ├── product-detection-config.csv
+  └── product-codes.csv
+
+# Landscape configuration (environment-specific)
+/opt/iwl/landscape-config/
+  └── <hostname>/
+      └── node-config.conf
 
 # Data storage (persistent, never deleted during upgrades)
 /var/data/iwl/default-inspector-output/
+  └── iwdli_output_<hostname>_<timestamp>.csv
+
+# Audit logs (session logs and debug outputs)
+/var/log/iwl/inspector-audit/
   └── YYYYMMDD_HHMMSS/
-      └── inspect_output.csv
+      ├── iwdli_session.log
+      └── <debug-files>
 
 # Environment configuration
 export IWDLI_HOME=/opt/iwl/default-inspector
-export IWDLI_CONFIG_DIR=/opt/iwl/default-inspector
+export IWDLI_DETECTION_CONFIG_DIR=/opt/iwl/detection-config
+export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/iwl/landscape-config
 export IWDLI_DATA_DIR=/var/data/iwl/default-inspector-output
+export IWDLI_AUDIT_DIR=/var/log/iwl/inspector-audit
 ```
 
 ### Directory Structure
@@ -182,20 +220,25 @@ export IWDLI_DATA_DIR=/var/data/iwl/default-inspector-output
 inspectors/default/
 ├── common/
 │   ├── detect_system_info.sh          # Main detection script
-│   ├── node-config.conf                # Default fallback configuration
+│   └── node-config.conf                # Default fallback configuration
+├── detection-config/                   # Contract-level configuration (IWDLI_DETECTION_CONFIG_DIR)
 │   ├── ibm-eligible-processors.csv     # Processor eligibility reference
-│   └── ibm-eligible-virt-and-os.csv    # OS/virtualization eligibility reference
-└── landscape-config/                   # Configuration (can be external via INSPECT_CONFIG_DIR)
-    ├── <hostname>/                     # Hostname-specific configurations
-    │   └── node-config.conf            # Host-specific node configuration
-    ├── product-detection-config.csv    # Process detection patterns
-    └── product-codes.csv               # Product code mappings
+│   ├── ibm-eligible-virt-and-os.csv    # OS/virtualization eligibility reference
+│   ├── product-codes.csv               # Product code mappings
+│   └── product-detection-config.csv    # Process detection patterns
+└── landscape-config/                   # Environment-specific configuration (IWDLI_LANDSCAPE_CONFIG_DIR)
+    └── <hostname>/                     # Hostname-specific configurations
+        └── node-config.conf            # Host-specific node configuration
 
-# Data directory (separate, via IWDLI_DATA_DIR or command line argument)
-detection-output/
+# Data directory (separate, via IWDLI_DATA_DIR)
+data/
+└── iwdli_output_<hostname>_<timestamp>.csv
+
+# Audit directory (separate, via IWDLI_AUDIT_DIR)
+audit/
 └── YYYYMMDD_HHMMSS/                    # Timestamped session directories
-    ├── inspect_output.csv
-    └── session.log
+    ├── iwdli_session.log
+    └── <debug-files>
 ```
 
 ### Node Configuration (`node-config.conf`)
@@ -214,10 +257,12 @@ INSPECTION_LEVEL=full
 ```
 
 **Configuration Lookup Logic:**
-1. First attempts: `landscape-config/<hostname>/node-config.conf`
-2. Falls back to: `common/node-config.conf`
+1. First attempts: `$IWDLI_LANDSCAPE_CONFIG_DIR/<hostname>/node-config.conf`
+2. Falls back to: `$script_dir/node-config.conf` (in common directory)
 
 ### Product Detection Configuration (`product-detection-config.csv`)
+
+Located in `$IWDLI_DETECTION_CONFIG_DIR/product-detection-config.csv`
 
 Defines patterns to detect running webMethods processes:
 
@@ -235,6 +280,8 @@ awbrokermon,BRK_ONP_PRD,BRK_ONP_NPR,native,Native process with awbrokermon in co
 - `notes`: Documentation
 
 ### Reference Data Files
+
+Located in `$IWDLI_DETECTION_CONFIG_DIR/`
 
 #### `ibm-eligible-processors.csv`
 Defines IBM-eligible processor types for subcapacity licensing:
@@ -281,25 +328,33 @@ The code/config/data separation allows safe upgrades without losing historical d
    ./install.sh /opt/inspector
    ```
 
-5. **Verify configuration** (configuration is preserved if using INSPECT_CONFIG_DIR):
+5. **Verify configuration** (configurations are preserved if using separate directories):
    ```bash
-   # Check that your config still exists
-   ls -la /etc/inspector-config/landscape-config/
+   # Check that your detection config still exists
+   ls -la /opt/iwl/detection-config/
+   
+   # Check that your landscape config still exists  
+   ls -la /opt/iwl/landscape-config/
    ```
 
 6. **Test the new version**:
    ```bash
-   export IWDLI_CONFIG_DIR=/etc/inspector-config
+   export IWDLI_DETECTION_CONFIG_DIR=/opt/iwl/detection-config
+   export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/iwl/landscape-config
    export IWDLI_DATA_DIR=/var/data/inspector-output
+   export IWDLI_AUDIT_DIR=/var/log/inspector-audit
    export IWDLI_DEBUG=ON
    /opt/inspector/common/detect_system_info.sh
    ```
 
 7. **Review output**:
    ```bash
-   # Check latest session directory
+   # Check latest session directory in audit logs
+   ls -lrt /var/log/inspector-audit/
+   cat /var/log/inspector-audit/<latest>/iwdli_session.log
+   
+   # Check CSV output
    ls -lrt /var/data/inspector-output/
-   cat /var/data/inspector-output/<latest>/session.log
    ```
 
 ### What Gets Upgraded
@@ -307,7 +362,8 @@ The code/config/data separation allows safe upgrades without losing historical d
 - ✅ **Code**: Shell scripts with bug fixes and new features
 - ✅ **Default configurations**: Sample configurations in package
 - ❌ **Historical data**: Data directory remains untouched
-- ❌ **Custom configurations**: If using `IWDLI_CONFIG_DIR`, configurations are separate
+- ❌ **Detection config**: If using `IWDLI_DETECTION_CONFIG_DIR`, contract-level configs are separate
+- ❌ **Landscape config**: If using `IWDLI_LANDSCAPE_CONFIG_DIR`, environment configs are separate
 
 ### Best Practices
 
@@ -315,16 +371,25 @@ The code/config/data separation allows safe upgrades without losing historical d
    ```bash
    # In /etc/profile.d/iwdli.sh or similar
    export IWDLI_HOME=/opt/inspector
-   export IWDLI_CONFIG_DIR=/etc/inspector-config
+   export IWDLI_DETECTION_CONFIG_DIR=/opt/iwl/detection-config
+   export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/iwl/landscape-config
    export IWDLI_DATA_DIR=/var/data/inspector-output
+   export IWDLI_AUDIT_DIR=/var/log/inspector-audit
    ```
 
 2. **Version control your configuration**:
    ```bash
-   cd /etc/inspector-config
+   # Detection config (contract-level)
+   cd /opt/iwl/detection-config
    git init
-   git add landscape-config/
-   git commit -m "Initial configuration"
+   git add *.csv
+   git commit -m "Initial detection configuration"
+   
+   # Landscape config (environment-specific)
+   cd /opt/iwl/landscape-config
+   git init
+   git add */node-config.conf
+   git commit -m "Initial landscape configuration"
    ```
 
 3. **Separate data storage** on dedicated partition or mount:
@@ -507,7 +572,7 @@ Add to crontab for daily execution at 2 AM:
 crontab -e
 
 # Add this line (with environment variables for production):
-0 2 * * * export IWDLI_CONFIG_DIR=/etc/inspector-config; export IWDLI_DATA_DIR=/var/data/inspector-output; /opt/inspector/common/detect_system_info.sh >> /var/log/license-inspector.log 2>&1
+0 2 * * * export IWDLI_DETECTION_CONFIG_DIR=/opt/iwl/detection-config; export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/iwl/landscape-config; export IWDLI_DATA_DIR=/var/data/inspector-output; export IWDLI_AUDIT_DIR=/var/log/inspector-audit; /opt/inspector/common/detect_system_info.sh >> /var/log/license-inspector.log 2>&1
 ```
 
 **Alternative: Use a wrapper script for cleaner cron setup**
@@ -519,8 +584,10 @@ Create `/opt/inspector/bin/run-inspector.sh`:
 
 # Set environment
 export IWDLI_HOME=/opt/inspector
-export IWDLI_CONFIG_DIR=/etc/inspector-config
+export IWDLI_DETECTION_CONFIG_DIR=/opt/iwl/detection-config
+export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/iwl/landscape-config
 export IWDLI_DATA_DIR=/var/data/inspector-output
+export IWDLI_AUDIT_DIR=/var/log/inspector-audit
 export PATH=/usr/bin:/bin
 
 # Run inspector
@@ -540,11 +607,14 @@ Then in crontab:
 Consider implementing data retention and cleanup:
 
 ```bash
-# Keep only last 90 days of inspection results
-find /var/data/inspector-output -type d -name "20*" -mtime +90 -exec rm -rf {} \;
+# Keep only last 90 days of CSV output files
+find /var/data/inspector-output -name "iwdli_output_*.csv" -mtime +90 -delete
+
+# Keep only last 90 days of audit logs
+find /var/log/inspector-audit -type d -name "20*" -mtime +90 -exec rm -rf {} \;
 ```
 
-**Note**: With separate data directory, you can safely upgrade code without affecting historical data.
+**Note**: With separate data and audit directories, you can safely upgrade code without affecting historical data or logs.
 
 ## Troubleshooting
 
@@ -566,13 +636,13 @@ export IWDLI_DEBUG=ON
 
 ### Debug Output Files
 
-Debug mode creates additional files in the session directory:
+Debug mode creates additional files in the session audit directory:
 
 - `ps-aux.out`: Complete process listing (BSD-style)
 - `ps-ef.out`: Complete process listing (Unix-style)
 - `<command>.out`: Standard output of each system command
 - `<command>.err`: Standard error of each system command
-- `session.log`: Comprehensive execution log with timestamps
+- `iwdli_session.log`: Comprehensive execution log with timestamps
 
 ### Common Issues
 
@@ -587,9 +657,10 @@ Debug mode creates additional files in the session directory:
 - Check `HOST_PHYSICAL_CPUS` and `PARTITION_CPUS` values
 
 **Issue: Configuration not found**
-- Ensure `landscape-config/<hostname>/node-config.conf` exists
+- Ensure `$IWDLI_LANDSCAPE_CONFIG_DIR/<hostname>/node-config.conf` exists
 - Verify hostname matches: `hostname` command output
-- Check fallback to `common/node-config.conf`
+- Check fallback to `$script_dir/node-config.conf`
+- Verify `IWDLI_DETECTION_CONFIG_DIR` contains required CSV files
 
 **Issue: Physical host identification failed**
 - Review `HOST_ID_METHOD` and `HOST_ID_CONFIDENCE` in output
@@ -609,13 +680,13 @@ Run with appropriate sudo/root access as needed for your platform.
 
 ### CSV File Collection
 
-Inspection results are designed for centralized collection. With the code/data separation, you can use a consistent data directory across all nodes:
+Inspection results are designed for centralized collection. With the code/data separation, you can use consistent directories across all nodes:
 
 **Push Mode:**
 ```bash
-# From inspector node, push latest results to central server
-LATEST_DIR=$(ls -td ${IWDLI_DATA_DIR:-/var/data/inspector-output}/20* | head -1)
-scp -r "$LATEST_DIR" user@central-server:/data/inspections/$(hostname)/
+# From inspector node, push latest CSV to central server
+LATEST_FILE=$(ls -t ${IWDLI_DATA_DIR:-/var/data/inspector-output}/iwdli_output_*.csv | head -1)
+scp "$LATEST_FILE" user@central-server:/data/inspections/$(hostname)/
 ```
 
 **Pull Mode:**
@@ -623,8 +694,8 @@ scp -r "$LATEST_DIR" user@central-server:/data/inspections/$(hostname)/
 # From central server, pull results from inspector nodes
 HOSTNAME=webm-prod-server1
 DATA_DIR=/var/data/inspector-output
-ssh user@${HOSTNAME} "ls -td ${DATA_DIR}/20* | head -1" | \
-  xargs -I {} scp -r user@${HOSTNAME}:{} /data/inspections/${HOSTNAME}/
+ssh user@${HOSTNAME} "ls -t ${DATA_DIR}/iwdli_output_*.csv | head -1" | \
+  xargs -I {} scp user@${HOSTNAME}:{} /data/inspections/${HOSTNAME}/
 ```
 
 **Automated Collection Script:**
@@ -639,15 +710,15 @@ while read hostname; do
     echo "Collecting from $hostname..."
     REMOTE_DATA_DIR=/var/data/inspector-output
     
-    # Get latest session directory
-    LATEST=$(ssh user@${hostname} "ls -td ${REMOTE_DATA_DIR}/20* 2>/dev/null | head -1")
+    # Get latest CSV file
+    LATEST=$(ssh user@${hostname} "ls -t ${REMOTE_DATA_DIR}/iwdli_output_*.csv 2>/dev/null | head -1")
     
     if [ -n "$LATEST" ]; then
         # Create target directory
         mkdir -p "${CENTRAL_DATA_DIR}/${hostname}"
         
         # Copy the data
-        scp -r "user@${hostname}:${LATEST}" "${CENTRAL_DATA_DIR}/${hostname}/"
+        scp "user@${hostname}:${LATEST}" "${CENTRAL_DATA_DIR}/${hostname}/"
         echo "✓ Collected $(basename $LATEST) from $hostname"
     else
         echo "✗ No data found on $hostname"
@@ -675,10 +746,10 @@ As IBM updates their eligible processor and virtualization technology lists:
    - [Eligible Processor Technology](https://public.dhe.ibm.com/software/passportadvantage/SubCapacity/Eligible_Processor_Technology.pdf)
 
 2. **Update CSV files**:
-   - `landscape-config/ibm-eligible-processors.csv`
-   - `landscape-config/ibm-eligible-virt-and-os.csv`
+   - `$IWDLI_DETECTION_CONFIG_DIR/ibm-eligible-processors.csv`
+   - `$IWDLI_DETECTION_CONFIG_DIR/ibm-eligible-virt-and-os.csv`
 
-3. **Redistribute to all nodes** using the release system
+3. **Redistribute to all nodes** using the release system or by updating the shared detection-config directory
 
 ### Version Management
 
@@ -705,10 +776,14 @@ Inspection results contain system configuration details:
 
 ```bash
 # Restrict access to configuration and output directories
-chmod 750 landscape-config/
-chmod 750 test-detection-output/
-chown root:sysadmin landscape-config/
-chown inspector:sysadmin test-detection-output/
+chmod 750 /opt/iwl/detection-config/
+chmod 750 /opt/iwl/landscape-config/
+chmod 750 /var/data/inspector-output/
+chmod 750 /var/log/inspector-audit/
+chown root:sysadmin /opt/iwl/detection-config/
+chown root:sysadmin /opt/iwl/landscape-config/
+chown inspector:sysadmin /var/data/inspector-output/
+chown inspector:sysadmin /var/log/inspector-audit/
 ```
 
 ## Reference Documentation
