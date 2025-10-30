@@ -38,6 +38,7 @@ iwdli_session_log="${iwdli_session_audit_dir}/iwdli_session.log"
 hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
 iwdli_output_file="${IWDLI_DATA_DIR}/iwdli_output_${hostname_short}_${iwdli_session_timestamp}.csv"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
+os_name=$(uname -s)
 
 # Global variables for results
 OS_NAME=""
@@ -147,15 +148,12 @@ log_session_info() {
   logD "  iwdli_output_file=${iwdli_output_file}"
   logD "Script variables:"
   logD "  script_dir=${script_dir}"
+  logD "  os_name=${os_name}"
   logD "==========================="
 }
 
 # Function to detect operating system
 detect_os() {
-    # shellcheck disable=SC2006
-    os_name=$(uname -s)
-    logD "os_name=${os_name}"
-    
     # Check specific OS types first before generic checks
     if [ "$os_name" = "AIX" ]; then
         # IBM AIX
@@ -298,7 +296,6 @@ detect_os() {
 
 # Function to count CPUs
 detect_cpu_count() {
-    os_name=$(uname -s)
     logD "Detecting CPU count for ${os_name}"
     
     if [ "$os_name" = "AIX" ]; then
@@ -778,7 +775,6 @@ generic_linux_fallback() {
 detect_virtualization() {
     IS_VIRTUALIZED="no"
     VIRT_TYPE="none"
-    os_name=$(uname -s)
     
     log "Starting virtualization detection for ${os_name}"
     logD "Initial state: IS_VIRTUALIZED=${IS_VIRTUALIZED}, VIRT_TYPE=${VIRT_TYPE}"
@@ -999,7 +995,6 @@ detect_virtualization() {
 detect_processor() {
     PROCESSOR_VENDOR=""
     PROCESSOR_BRAND=""
-    os_name=$(uname -s)
     
     log "Starting processor detection for ${os_name}"
     
@@ -1219,14 +1214,14 @@ detect_processor() {
 # Function to check processor eligibility
 check_processor_eligibility() {
     PROCESSOR_ELIGIBLE="false"
-    # Load processors CSV from landscape-config (required)
-    processors_csv="$IWDLI_LANDSCAPE_CONFIG_DIR/ibm-eligible-processors.csv"
+    # Load processors CSV from detection-config (contract-level configuration)
+    processors_csv="$IWDLI_DETECTION_CONFIG_DIR/ibm-eligible-processors.csv"
     
     logD "Checking processor eligibility using: ${processors_csv}"
     
     if [ ! -f "$processors_csv" ]; then
         log "ERROR: Required processor eligibility file not found: ${processors_csv}"
-        log "ERROR: This file must exist in landscape-config directory"
+        log "ERROR: This file must exist in detection-config directory"
         exit 1
     fi
     
@@ -1262,13 +1257,13 @@ check_os_virt_eligibility() {
     OS_ELIGIBLE="false"
     VIRT_ELIGIBLE="false"
     # Load virt/OS CSV from landscape-config (required)
-    virt_os_csv="$IWDLI_LANDSCAPE_CONFIG_DIR/ibm-eligible-virt-and-os.csv"
+    virt_os_csv="$IWDLI_DETECTION_CONFIG_DIR/ibm-eligible-virt-and-os.csv"
     
     logD "Checking OS and virtualization eligibility using: ${virt_os_csv}"
     
     if [ ! -f "$virt_os_csv" ]; then
         log "ERROR: Required OS/Virtualization eligibility file not found: ${virt_os_csv}"
-        log "ERROR: This file must exist in landscape-config directory"
+        log "ERROR: This file must exist in detection-config directory"
         exit 1
     fi
     
@@ -1582,13 +1577,17 @@ show_usage() {
     echo "  - VIRT_ELIGIBLE: true/false if virtualization is IBM-eligible"
     echo ""
     echo "Environment variables:"
-    echo "  IWDLI_DEBUG=ON          Enable debug logging and command output capture"
-    echo "  IWDLI_CONFIG_DIR=path   Set custom configuration directory location"
-    echo "                          (default: parent directory of script location)"
-    echo "  IWDLI_DATA_DIR=path     Set custom data output directory location"
-    echo "                          (default: ./detection-output or first argument)"
-    echo "  IWDLI_HOME=path         Set inspector home directory"
-    echo "                          (default: ~/iwdli for user installations)"
+    echo "  IWDLI_DEBUG=ON                    Enable debug logging and command output capture"
+    echo "  IWDLI_HOME=path                   Set inspector home directory"
+    echo "                                    (default: /tmp/iwdli-home)"
+    echo "  IWDLI_AUDIT_DIR=path              Set audit/log output directory"
+    echo "                                    (default: \$IWDLI_HOME/audit)"
+    echo "  IWDLI_DATA_DIR=path               Set CSV data output directory"
+    echo "                                    (default: \$IWDLI_HOME/data)"
+    echo "  IWDLI_DETECTION_CONFIG_DIR=path   Set detection configuration directory"
+    echo "                                    (default: \$IWDLI_HOME/detection-config)"
+    echo "  IWDLI_LANDSCAPE_CONFIG_DIR=path   Set landscape configuration directory"
+    echo "                                    (default: \$IWDLI_HOME/landscape-config)"
     echo ""
     echo "Supported platforms:"
     echo "  - AIX (PowerVM detection)"
@@ -1596,8 +1595,15 @@ show_usage() {
     echo "  - Solaris (Zones/Containers, Oracle VM for SPARC)"
     echo "  - Basic IBM i and Windows detection"
     echo ""
-    echo "Note: Eligibility checking requires ibm-eligible-processors.csv and"
-    echo "      ibm-eligible-virt-and-os.csv files in the same directory as this script."
+    echo "Configuration files:"
+    echo "  Detection config (IWDLI_DETECTION_CONFIG_DIR - contract-level, fixed):"
+    echo "    - ibm-eligible-processors.csv"
+    echo "    - ibm-eligible-virt-and-os.csv"
+    echo "    - product-codes.csv"
+    echo "    - product-detection-config.csv"
+    echo "  Landscape config (IWDLI_LANDSCAPE_CONFIG_DIR - per environment):"
+    echo "    - <hostname>/node-config.conf (host-specific settings)"
+    echo "    - Fallback: node-config.conf in script directory"
 }
 
 # Function to load node configuration based on hostname
@@ -1661,7 +1667,7 @@ load_node_config() {
 # Returns: IBM product code or "UNKNOWN" if not found
 get_product_code() {
     local product_mnemo="$1"
-    local product_codes_file="$IWDLI_LANDSCAPE_CONFIG_DIR/product-codes.csv"
+    local product_codes_file="$IWDLI_DETECTION_CONFIG_DIR/product-codes.csv"
     
     if [ ! -f "$product_codes_file" ]; then
         log "WARNING: product-codes.csv not found at: $product_codes_file"
@@ -1869,14 +1875,14 @@ detect_product_installations() {
 
 # Function to detect running webMethods products
 detect_products() { 
-    # Load product detection config from landscape-config (required)
-    product_config_file="$IWDLI_LANDSCAPE_CONFIG_DIR/product-detection-config.csv"
+    # Load product detection config from detection-config (contract-level configuration)
+    product_config_file="$IWDLI_DETECTION_CONFIG_DIR/product-detection-config.csv"
     
     logD "Starting product detection using: ${product_config_file}"
     
     if [ ! -f "$product_config_file" ]; then
         log "ERROR: Required product detection config file not found: $product_config_file"
-        log "ERROR: This file must exist in landscape-config directory"
+        log "ERROR: This file must exist in detection-config directory"
         exit 1
     fi
     
@@ -2066,82 +2072,82 @@ detect_products() {
 
 # Main execution
 main() {
-    # Handle command line arguments
-    if [ -n "$1" ]; then
-        if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-            show_usage
-            exit 0
-        fi
+  # Handle command line arguments
+  if [ -n "$1" ]; then
+    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+      show_usage
+      exit 0
     fi
+  fi
+  
+  # Log all session information in debug mode
+  log_session_info
+
+  # Create audit directory for this session (debug output, logs)
+  mkdir -p "${iwdli_session_audit_dir}" || {
+      echo "Error: Cannot create session audit directory: ${iwdli_session_audit_dir}" >&2
+      exit 1
+  }
+  
+  # Create data directory if it doesn't exist
+  mkdir -p "${IWDLI_DATA_DIR}" || {
+      echo "Error: Cannot create data directory: ${IWDLI_DATA_DIR}" >&2
+      exit 2
+  }
+        
+  # Initialize session log
+  echo "=== System Detection Session Started ===" >> "$iwdli_session_log"
+  echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
+  echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
+  echo "Script Directory: $script_dir" >> "$iwdli_session_log"
+  echo "Data Directory: ${IWDLI_DATA_DIR}" >> "$iwdli_session_log"
+  echo "Detection Config Directory: ${IWDLI_DETECTION_CONFIG_DIR}" >> "$iwdli_session_log"
+  echo "Landscape Config Directory: ${IWDLI_LANDSCAPE_CONFIG_DIR}" >> "$iwdli_session_log"
+  echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$iwdli_session_log"
+  echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$iwdli_session_log"
+  echo "=========================================" >> "$iwdli_session_log"
+  echo "" >> "$iwdli_session_log"
     
-    # Create audit directory for this session (debug output, logs)
-    mkdir -p "${iwdli_session_audit_dir}" || {
-        echo "Error: Cannot create session audit directory: ${iwdli_session_audit_dir}" >&2
-        exit 1
-    }
+  log "Starting system detection"
+  log "Session audit directory: ${iwdli_session_audit_dir}"
+  log "Output file: ${iwdli_output_file}"
+  log "Session log: ${iwdli_session_log}"
     
-    # Create data directory if it doesn't exist
-    mkdir -p "${IWDLI_DATA_DIR}" || {
-        echo "Error: Cannot create data directory: ${IWDLI_DATA_DIR}" >&2
-        exit 1
-    }
+  # Create CSV file with header
+  echo "Parameter,Value" > "$iwdli_output_file"
+  write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  write_csv "session_audit_directory" "$iwdli_session_audit_dir"
     
-    # Log all session information in debug mode
-    log_session_info
+  # Detect system information
+  detect_os
+  detect_cpu_count
+  detect_virtualization
+  detect_processor
     
-    # Initialize session log
-    echo "=== System Detection Session Started ===" >> "$iwdli_session_log"
-    echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
-    echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
-    echo "Script Directory: $script_dir" >> "$iwdli_session_log"
-    echo "Data Directory: ${IWDLI_DATA_DIR}" >> "$iwdli_session_log"
-    echo "Detection Config Directory: ${IWDLI_DETECTION_CONFIG_DIR}" >> "$iwdli_session_log"
-    echo "Landscape Config Directory: ${IWDLI_LANDSCAPE_CONFIG_DIR}" >> "$iwdli_session_log"
-    echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$iwdli_session_log"
-    echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$iwdli_session_log"
-    echo "=========================================" >> "$iwdli_session_log"
-    echo "" >> "$iwdli_session_log"
+  # Detect host/physical CPU information for licensing calculations
+  detect_host_physical_cpus
+  
+  # Detect physical host identifier for VM aggregation
+  detect_physical_host_id
+  
+  # Check eligibility
+  check_processor_eligibility
+  check_os_virt_eligibility
+  
+  # Calculate considered CPUs based on eligibility and physical constraints
+  calculate_considered_cpus
+  
+  # Detect running webMethods products
+  detect_products
     
-    log "Starting system detection"
-    log "Session audit directory: ${iwdli_session_audit_dir}"
-    log "Output file: ${iwdli_output_file}"
-    log "Session log: ${iwdli_session_log}"
-    
-    # Create CSV file with header
-    echo "Parameter,Value" > "$iwdli_output_file"
-    write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    write_csv "session_audit_directory" "$iwdli_session_audit_dir"
-    
-    # Detect system information
-    detect_os
-    detect_cpu_count
-    detect_virtualization
-    detect_processor
-    
-    # Detect host/physical CPU information for licensing calculations
-    detect_host_physical_cpus
-    
-    # Detect physical host identifier for VM aggregation
-    detect_physical_host_id
-    
-    # Check eligibility
-    check_processor_eligibility
-    check_os_virt_eligibility
-    
-    # Calculate considered CPUs based on eligibility and physical constraints
-    calculate_considered_cpus
-    
-    # Detect running webMethods products
-    detect_products
-    
-    log "Detection complete. Results written to: ${iwdli_output_file}"
-    log "Session log available at: ${iwdli_session_log}"
-    
-    # Final session log entry
-    echo "" >> "$iwdli_session_log"
-    echo "=== System Detection Session Completed ===" >> "$iwdli_session_log"
-    echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
-    echo "==========================================" >> "$iwdli_session_log"
+  log "Detection complete. Results written to: ${iwdli_output_file}"
+  log "Session log available at: ${iwdli_session_log}"
+  
+  # Final session log entry
+  echo "" >> "$iwdli_session_log"
+  echo "=== System Detection Session Completed ===" >> "$iwdli_session_log"
+  echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
+  echo "==========================================" >> "$iwdli_session_log"
 }
 
 # Execute main function with all arguments
