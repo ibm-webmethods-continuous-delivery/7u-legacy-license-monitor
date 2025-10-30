@@ -34,6 +34,7 @@ iwdli_session_timestamp=$(date -u '+%Y-%m-%d_%H%M%S')
 iwdli_session_audit_dir=${IWDLI_SESSION_AUDIT_DIR:-${IWDLI_AUDIT_DIR}/${iwdli_session_timestamp}}
 # note that user MAY provide a IWDLI_SESSION_AUDIT_DIR folder if they want to keep the audit files in an upfront defined folder
 iwdli_session_log="${iwdli_session_audit_dir}/iwdli_session.log"
+# shellcheck disable=SC3028
 hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
 iwdli_output_file="${IWDLI_DATA_DIR}/iwdli_output_${hostname_short}_${iwdli_session_timestamp}.csv"
 
@@ -73,45 +74,61 @@ write_csv() {
 
 # Function to log important information
 log() {
-    echo "[INFO] $1" >&2
-    if [ -n "$iwdli_session_log" ]; then
-        echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$iwdli_session_log"
-    fi
+  __log_time=$(date -u '+%H:%M:%S')
+  echo "${__log_time}[INF] $1" >&2
+  if [ -n "$iwdli_session_log" ]; then
+      echo "${__log_time}[INF] $1" >> "$iwdli_session_log"
+  fi
+  unset __log_time
+}
+
+# Function to log important information
+logE() {
+  __log_time=$(date -u '+%H:%M:%S')
+  echo "${__log_time}[ERR] $1" >&2
+  if [ -n "$iwdli_session_log" ]; then
+      echo "${__log_time}[ERR] $1" >> "$iwdli_session_log"
+  fi
+  unset __log_time
 }
 
 # Function to log debug information if IWDLI_DEBUG=ON
 logD() {
-    if [ "$IWDLI_DEBUG" = "ON" ]; then
-        echo "[DEBUG] $1" >&2
-        if [ -n "$iwdli_session_log" ]; then
-            echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$iwdli_session_log"
-        fi
+  if [ "$IWDLI_DEBUG" = "ON" ]; then
+    __log_time=$(date -u '+%H:%M:%S')
+    echo "${__log_time}[DBG] $1" >&2
+    if [ -n "$iwdli_session_log" ]; then
+      echo "${__log_time}[DBG] $1" >> "$iwdli_session_log"
     fi
+    unset __log_time
+  fi
 }
 
 # Function to run command with debug output capture
 run_debug_cmd() {
-    local cmd="$1"
-    local cmd_name="$2"
+  if [ "$IWDLI_DEBUG" = "ON" ] && [ -n "$iwdli_session_audit_dir" ]; then
+    logD "Running command: $1"
+    __out_file="${iwdli_session_audit_dir}/$2.out"
+    __err_file="${iwdli_session_audit_dir}/$2.err"
     
-    if [ "$IWDLI_DEBUG" = "ON" ] && [ -n "$iwdli_session_audit_dir" ]; then
-        logD "Running command: $cmd"
-        local out_file="${iwdli_session_audit_dir}/${cmd_name}.out"
-        local err_file="${iwdli_session_audit_dir}/${cmd_name}.err"
-        
-        # Run command and capture both stdout and stderr
-        eval "$cmd" >"$out_file" 2>"$err_file"
-        local exit_code=$?
-        
-        logD "Command '$cmd' completed with exit code: $exit_code"
-        logD "Output saved to: $out_file"
-        logD "Errors saved to: $err_file"
-        
-        return $exit_code
-    else
-        # Regular execution without debug capture
-        eval "$cmd"
+    # Run command and capture both stdout and stderr
+    eval "$1" >"$__out_file" 2>"$__err_file"
+    __exit_code=$?
+    
+    if [ ${__exit_code} -ne 0 ]; then
+      logE "Command '$1' completed with exit code: $__exit_code"
     fi
+
+    logD "Command '$1' completed with exit code: $__exit_code"
+    logD "Output saved to: $__out_file"
+    logD "Errors saved to: $__err_file"
+    
+    unset __out_file __err_file __exit_code
+    return 1
+  else
+    # Regular execution without debug capture
+    eval "$1"
+  fi
 }
 
 # Function to detect operating system
