@@ -26,5 +26,6 @@
     "virtinfo",
     "webmethods",
     "zonename"
-  ]
+  ],
+  "editor.tabSize": 2
 }

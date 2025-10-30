@@ -21,6 +21,20 @@
 
 set -e
 
+## Assurance of global public constants
+export IWDLI_DEBUG="${IWDLI_DEBUG:-OFF}"
+export IWDLI_HOME="${IWDLI_HOME:-/tmp/iwdli-home}"
+export IWDLI_AUDIT_DIR="${IWDLI_AUDIT_DIR:-${IWDLI_HOME}/audit}"
+export IWDLI_DATA_DIR="${IWDLI_DATA_DIR:-${IWDLI_HOME}/data}"
+export IWDLI_DETECTION_CONFIG_DIR="${IWDLI_DETECTION_CONFIG_DIR:-${IWDLI_HOME}/detection-config}"
+export IWDLI_LANDSCAPE_CONFIG_DIR="${IWDLI_LANDSCAPE_CONFIG_DIR:-${IWDLI_HOME}/landscape-config}"
+
+## Session global private constants
+iwdli_session_timestamp=$(date -u '+%Y-%m-%d_%H%M%S')
+iwdli_session_audit_dir=${IWDLI_SESSION_AUDIT_DIR:-${IWDLI_AUDIT_DIR}/${iwdli_session_timestamp}}
+# note that user MAY provide a IWDLI_SESSION_AUDIT_DIR folder if they want to keep the audit files in an upfront defined folder
+iwdli_session_log="${iwdli_session_audit_dir}/iwdli_session.log"
+
 # Global variables for results
 OS_NAME=""
 OS_VERSION=""
@@ -52,24 +66,20 @@ OUTPUT_FILE=""
 # Global variable for script directory (to find CSV files)
 SCRIPT_DIR=""
 
-# Global variable for output directory and session folder
-OUTPUT_DIR=""
-SESSION_DIR=""
-SESSION_LOG=""
+# Script internal variables (initialized in main)
+OUTPUT_FILE=""
 
 # Function to write a parameter-value pair to CSV
 write_csv() {
-    local parameter="$1"
-    local value="$2"
-    echo "${parameter},${value}" >> "$OUTPUT_FILE"
-    logD "CSV: ${parameter}=${value}"
+  echo "$1,$2" >> "$OUTPUT_FILE"
+  logD "CSV: $1=$2"
 }
 
 # Function to log important information
 log() {
     echo "[INFO] $1" >&2
-    if [ -n "$SESSION_LOG" ]; then
-        echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
+    if [ -n "$iwdli_session_log" ]; then
+        echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$iwdli_session_log"
     fi
 }
 
@@ -77,8 +87,8 @@ log() {
 logD() {
     if [ "$IWDLI_DEBUG" = "ON" ]; then
         echo "[DEBUG] $1" >&2
-        if [ -n "$SESSION_LOG" ]; then
-            echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
+        if [ -n "$iwdli_session_log" ]; then
+            echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$iwdli_session_log"
         fi
     fi
 }
@@ -88,10 +98,10 @@ run_debug_cmd() {
     local cmd="$1"
     local cmd_name="$2"
     
-    if [ "$IWDLI_DEBUG" = "ON" ] && [ -n "$SESSION_DIR" ]; then
+    if [ "$IWDLI_DEBUG" = "ON" ] && [ -n "$iwdli_session_audit_dir" ]; then
         logD "Running command: $cmd"
-        local out_file="${SESSION_DIR}/${cmd_name}.out"
-        local err_file="${SESSION_DIR}/${cmd_name}.err"
+        local out_file="${iwdli_session_audit_dir}/${cmd_name}.out"
+        local err_file="${iwdli_session_audit_dir}/${cmd_name}.err"
         
         # Run command and capture both stdout and stderr
         eval "$cmd" >"$out_file" 2>"$err_file"
@@ -1736,7 +1746,7 @@ detect_product_installations() {
     logD "Using du options: ${du_opts}, size threshold: ${size_threshold}"
     
     # Use temporary file to collect results (avoids subshell variable issues)
-    local temp_results="${SESSION_DIR}/disk_detect_${product_id}_$$.tmp"
+    local temp_results="${iwdli_session_audit_dir}/disk_detect_${product_id}_$$.tmp"
     
     # Process each search path
     for search_path in $search_paths; do
@@ -1870,25 +1880,25 @@ detect_products() {
     if [ "${IWDLI_DEBUG}" = "ON" ]; then
 
         logD "Capturing \"ps -ef\" ---"
-        ps -ef > "${SESSION_DIR}/c_ps-ef.out" 2>"${SESSION_DIR}/c_ps-ef.err"
+        ps -ef > "${iwdli_session_audit_dir}/c_ps-ef.out" 2>"${iwdli_session_audit_dir}/c_ps-ef.err"
 
         logD "Capturing \"ps auxww\" ---"
-        ps -ef > "${SESSION_DIR}/c_ps_auxww.out" 2>"${SESSION_DIR}/c_ps_auxww.err"
+        ps -ef > "${iwdli_session_audit_dir}/c_ps_auxww.out" 2>"${iwdli_session_audit_dir}/c_ps_auxww.err"
 
         if [ -x /bin/ucb/ps ]; then
             logD "Capturing \"ps auxww\" ---"
-            /usr/ucb/ps -ef > "${SESSION_DIR}/c_ucb_ps_auxww.out" 2>"${SESSION_DIR}/c_ucb_ps_auxww.err"
+            /usr/ucb/ps -ef > "${iwdli_session_audit_dir}/c_ucb_ps_auxww.out" 2>"${iwdli_session_audit_dir}/c_ucb_ps_auxww.err"
         fi
 
         case "${OS_NAME}" in
             "AIX"|"Solaris")
-                ps -ef > "${SESSION_DIR}/ps-ef.out" 2>"${SESSION_DIR}/ps-ef.err"
-                logD "Full process list captured: ${SESSION_DIR}/ps-ef.out"
+                ps -ef > "${iwdli_session_audit_dir}/ps-ef.out" 2>"${iwdli_session_audit_dir}/ps-ef.err"
+                logD "Full process list captured: ${iwdli_session_audit_dir}/ps-ef.out"
                 ;;
             *)
                 # Linux and others
-                ps aux > "${SESSION_DIR}/ps-aux.out" 2>"${SESSION_DIR}/ps-aux.err"
-                logD "Full process list captured: ${SESSION_DIR}/ps-aux.out"
+                ps aux > "${iwdli_session_audit_dir}/ps-aux.out" 2>"${iwdli_session_audit_dir}/ps-aux.err"
+                logD "Full process list captured: ${iwdli_session_audit_dir}/ps-aux.out"
                 ;;
         esac
     fi
@@ -1917,63 +1927,41 @@ detect_products() {
         logD "Using product ID: ${product_id} (Node type: ${NODE_TYPE})"
         
         # ========================================
-        # PART 1: Process-based detection (existing functionality)
+        # PART 1: Process-based detection
         # ========================================
         
-        # Check if any processes match the pattern
-        found="false"
+        # Initialize detection status flags
+        process_running="false"
+        installation_detected="false"
+        running_process_count=0
+        process_cmdlines=""
         
-        # Use different process inspection methods based on OS
+        # Check if any processes match the pattern and count them
         case "$OS_NAME" in
-            "AIX")
-                if ps -ef | grep -v grep | grep "$grep_pattern" >/dev/null 2>&1; then
-                    found="true"
-                fi
-                ;;
-            "Solaris")
-                if ps -ef | grep -v grep | grep "$grep_pattern" >/dev/null 2>&1; then
-                    found="true"
+            "AIX"|"Solaris")
+                # Count matching processes
+                running_process_count=$(ps -ef | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
+                if [ "$running_process_count" -gt 0 ]; then
+                    process_running="true"
+                    # Capture command lines for running processes (limit to avoid CSV issues)
+                    process_cmdlines=$(ps -ef | grep -v grep | grep "$grep_pattern" | head -3 | awk '{for(i=8;i<=NF;i++) printf "%s ", $i; print ""}' | tr '\n' ';' | sed 's/;$//' 2>/dev/null || echo "")
                 fi
                 ;;
             *)
                 # Linux and others
-                if ps aux | grep -v grep | grep "$grep_pattern" >/dev/null 2>&1; then
-                    found="true"
+                running_process_count=$(ps aux | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
+                if [ "$running_process_count" -gt 0 ]; then
+                    process_running="true"
+                    # Capture command lines for running processes (limit to avoid CSV issues)
+                    process_cmdlines=$(ps aux | grep -v grep | grep "$grep_pattern" | head -3 | awk '{for(i=11;i<=NF;i++) printf "%s ", $i; print ""}' | tr '\n' ';' | sed 's/;$//' 2>/dev/null || echo "")
                 fi
                 ;;
         esac
         
-        if [ "$found" = "true" ]; then
-            logD "Found running process for product: $product_id (note: $notes)"
-            
-            # Get IBM product code mapping
-            ibm_product_code=$(get_product_code "$product_id")
-            logD "Product $product_id maps to IBM code: $ibm_product_code"
-            
-            write_csv "$product_id" "present"
-            write_csv "${product_id}_IBM_PRODUCT_CODE" "$ibm_product_code"
-            
-            # If debug mode is on, capture the specific grep results for this product
-            if [ "$IWDLI_DEBUG" = "ON" ]; then
-                debug_file="${SESSION_DIR}/processes_${product_id}.out"
-                case "$OS_NAME" in
-                    "AIX"|"Solaris")
-                        ps -ef | grep -v grep | grep "$grep_pattern" > "$debug_file" 2>/dev/null
-                        ;;
-                    *)
-                        ps aux | grep -v grep | grep "$grep_pattern" > "$debug_file" 2>/dev/null
-                        ;;
-                esac
-                logD "Process details saved to: $debug_file"
-            fi
-        else
-            logD "No running process found for pattern: $grep_pattern"
-            write_csv "$product_id" "absent"
-            write_csv "${product_id}_IBM_PRODUCT_CODE" "N/A"
-        fi
+        logD "Process detection for ${product_id}: running=${process_running}, count=${running_process_count}"
         
         # ========================================
-        # PART 2: Disk-based installation detection (NEW)
+        # PART 2: Disk-based installation detection
         # ========================================
         
         # Check if disk-based detection is enabled for this product
@@ -1983,7 +1971,75 @@ detect_products() {
             # Call disk detection function
             detect_product_installations "$product_id" "$disk_folder_name" "$disk_exclude_pattern"
             
-            # Write disk detection results to CSV
+            # Check if installations were found
+            if [ "$DETECT_INSTALL_STATUS" = "installed" ]; then
+                installation_detected="true"
+            fi
+            
+            logD "Disk detection for ${product_id}: installed=${installation_detected}, count=${DETECT_INSTALL_COUNT}"
+        else
+            logD "Disk-based detection NOT enabled for ${product_id}"
+            # Set default values when disk detection is disabled
+            DETECT_INSTALL_STATUS="not-installed"
+            DETECT_INSTALL_COUNT="0"
+            DETECT_INSTALL_PATHS=""
+        fi
+        
+        # ========================================
+        # PART 3: Determine overall product presence and write results
+        # ========================================
+        
+        # Product is "present" if it's either running OR installed (or both)
+        if [ "$process_running" = "true" ] || [ "$installation_detected" = "true" ]; then
+            product_present="true"
+        else
+            product_present="false"
+        fi
+        
+        logD "Overall product status for ${product_id}: present=${product_present} (running=${process_running}, installed=${installation_detected})"
+        
+        # Write product section ONLY if product is detected (present)
+        if [ "$product_present" = "true" ]; then
+            # Get IBM product code mapping - ALWAYS populate for detected products
+            ibm_product_code=$(get_product_code "$product_id")
+            logD "Product $product_id maps to IBM code: $ibm_product_code"
+            
+            write_csv "$product_id" "present"
+            write_csv "${product_id}_IBM_PRODUCT_CODE" "$ibm_product_code"
+        else
+            # Product is truly absent (neither running nor installed)
+            # NO CSV section created - omit entirely to avoid bloat
+            logD "Product $product_id is absent - no CSV section will be created"
+        fi
+        
+        # Write detailed status keys ONLY for detected (present) products
+        if [ "$product_present" = "true" ]; then
+            # Write running status keys
+            if [ "$process_running" = "true" ]; then
+                write_csv "${product_id}_RUNNING_STATUS" "running"
+                write_csv "${product_id}_RUNNING_COUNT" "$running_process_count"
+                write_csv "${product_id}_RUNNING_COMMANDLINES" "$process_cmdlines"
+                
+                # If debug mode is on, capture the specific grep results for this product
+                if [ "$IWDLI_DEBUG" = "ON" ]; then
+                    debug_file="${iwdli_session_audit_dir}/processes_${product_id}.out"
+                    case "$OS_NAME" in
+                        "AIX"|"Solaris")
+                            ps -ef | grep -v grep | grep "$grep_pattern" > "$debug_file" 2>/dev/null
+                            ;;
+                        *)
+                            ps aux | grep -v grep | grep "$grep_pattern" > "$debug_file" 2>/dev/null
+                            ;;
+                    esac
+                    logD "Process details saved to: $debug_file"
+                fi
+            else
+                write_csv "${product_id}_RUNNING_STATUS" "not-running"
+                write_csv "${product_id}_RUNNING_COUNT" "0"
+                write_csv "${product_id}_RUNNING_COMMANDLINES" ""
+            fi
+            
+            # Write installation status keys
             write_csv "${product_id}_INSTALL_STATUS" "$DETECT_INSTALL_STATUS"
             write_csv "${product_id}_INSTALL_COUNT" "$DETECT_INSTALL_COUNT"
             
@@ -1993,16 +2049,8 @@ detect_products() {
             else
                 write_csv "${product_id}_INSTALL_PATHS" ""
             fi
-            
-            logD "Disk detection results written for ${product_id}"
-        else
-            logD "Disk-based detection NOT enabled for ${product_id} (disk_search_enabled=${disk_search_enabled:-<empty>})"
-            
-            # Write N/A values for disk detection fields if not enabled
-            write_csv "${product_id}_INSTALL_STATUS" "disabled"
-            write_csv "${product_id}_INSTALL_COUNT" "0"
-            write_csv "${product_id}_INSTALL_PATHS" ""
         fi
+        # Note: No CSV keys written for absent products (neither running nor installed)
         
     done < "$product_config_file"
     
@@ -2025,60 +2073,65 @@ main() {
         logD "Using default config directory (parent of script dir): ${CONFIG_BASE_DIR}"
     fi
     
-    # Set output directory from environment, command line argument, or default
+    # Handle command line arguments
     if [ -n "$1" ]; then
         if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
             show_usage
             exit 0
         fi
-        OUTPUT_DIR="$1"
-    elif [ -n "$IWDLI_DATA_DIR" ]; then
-        OUTPUT_DIR="$IWDLI_DATA_DIR"
-        logD "Using output directory from IWDLI_DATA_DIR: ${OUTPUT_DIR}"
-    else
-        OUTPUT_DIR="./detection-output"
     fi
     
-    # Create timestamped session directory
-    TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
-    SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}"
+    # Create audit directory for this session (debug output, logs)
+    mkdir -p "${iwdli_session_audit_dir}" || {
+        echo "Error: Cannot create session audit directory: ${iwdli_session_audit_dir}" >&2
+        exit 1
+    }
     
-    # Create directories if they don't exist
-    mkdir -p "${SESSION_DIR}" || {
-        echo "Error: Cannot create session directory: ${SESSION_DIR}" >&2
+    # Determine output data directory (for CSV file)
+    local output_data_dir
+    if [ -n "$IWDLI_DATA_DIR" ]; then
+        output_data_dir="$IWDLI_DATA_DIR"
+        logD "Using output directory from IWDLI_DATA_DIR: ${output_data_dir}"
+    else
+        output_data_dir="./detection-output"
+    fi
+    
+    # Create data directory if it doesn't exist
+    mkdir -p "${output_data_dir}" || {
+        echo "Error: Cannot create data directory: ${output_data_dir}" >&2
         exit 1
     }
     
     local hostname_short
     # shellcheck disable=SC3028
     hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
-    # Set output file and session log
-    OUTPUT_FILE="${SESSION_DIR}/../iwdli_output_${hostname_short}_${TIMESTAMP}.csv"
-    SESSION_LOG="${SESSION_DIR}/iwdli_session.log"
+    # Set output CSV file in data directory
+    OUTPUT_FILE="${output_data_dir}/iwdli_output_${hostname_short}_${iwdli_session_timestamp}.csv"
     
     # Initialize session log
-    echo "=== System Detection Session Started ===" >> "$SESSION_LOG"
-    echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
-    echo "Session Directory: $SESSION_DIR" >> "$SESSION_LOG"
-    echo "Script Directory: $SCRIPT_DIR" >> "$SESSION_LOG"
-    echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$SESSION_LOG"
-    echo "Output Directory: ${OUTPUT_DIR}" >> "$SESSION_LOG"
-    echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$SESSION_LOG"
-    echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$SESSION_LOG"
-    echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$SESSION_LOG"
-    echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$SESSION_LOG"
-    echo "=========================================" >> "$SESSION_LOG"
-    echo "" >> "$SESSION_LOG"
+    echo "=== System Detection Session Started ===" >> "$iwdli_session_log"
+    echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
+    echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
+    echo "Script Directory: $SCRIPT_DIR" >> "$iwdli_session_log"
+    echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$iwdli_session_log"
+    echo "Output Data Directory: ${output_data_dir}" >> "$iwdli_session_log"
+    echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$iwdli_session_log"
+    echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$iwdli_session_log"
+    echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$iwdli_session_log"
+    echo "Audit Dir (env): ${IWDLI_AUDIT_DIR:-<not set>}" >> "$iwdli_session_log"
+    echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$iwdli_session_log"
+    echo "=========================================" >> "$iwdli_session_log"
+    echo "" >> "$iwdli_session_log"
     
     log "Starting system detection"
-    log "Session directory: ${SESSION_DIR}"
+    log "Session audit directory: ${iwdli_session_audit_dir}"
     log "Output file: ${OUTPUT_FILE}"
-    log "Session log: ${SESSION_LOG}"
+    log "Session log: ${iwdli_session_log}"
     
     # Create CSV file with header
     echo "Parameter,Value" > "$OUTPUT_FILE"
     write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    write_csv "session_directory" "$SESSION_DIR"
+    write_csv "session_audit_directory" "$iwdli_session_audit_dir"
     
     # Detect system information
     detect_os
@@ -2103,13 +2156,13 @@ main() {
     detect_products
     
     log "Detection complete. Results written to: ${OUTPUT_FILE}"
-    log "Session log available at: ${SESSION_LOG}"
+    log "Session log available at: ${iwdli_session_log}"
     
     # Final session log entry
-    echo "" >> "$SESSION_LOG"
-    echo "=== System Detection Session Completed ===" >> "$SESSION_LOG"
-    echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
-    echo "==========================================" >> "$SESSION_LOG"
+    echo "" >> "$iwdli_session_log"
+    echo "=== System Detection Session Completed ===" >> "$iwdli_session_log"
+    echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$iwdli_session_log"
+    echo "==========================================" >> "$iwdli_session_log"
 }
 
 # Execute main function with all arguments

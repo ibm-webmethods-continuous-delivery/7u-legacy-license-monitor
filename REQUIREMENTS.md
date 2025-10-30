@@ -173,21 +173,54 @@ Inspectors create session-based output directories with the following structure:
 
 ### Product Detection
 
-The inspector automatically detects running webMethods products by scanning system processes using configurable patterns:
+The inspector detects webMethods products through both process scanning and disk-based installation detection:
 
-**Detection Method:**
-- **Integration Server**: Scans for Java processes with "IntegrationServer" in command line
-- **Broker Server**: Scans for native processes with "awbrokermon" in command line
+**Detection Methods:**
+- **Process Detection**: Scans for running processes using configurable patterns from `product-detection-config.csv`
+- **Disk Detection**: Searches filesystem for product installation directories when enabled per product
+- **Dual Detection**: Products can be detected as installed, running, or both
 
-**Product Mapping:**
+**Product Detection Semantics:**
+
+1. **Section Presence**: `<PRODUCT_CODE>` section MUST be present if product is detected as either running OR installed
+2. **IBM Product Code**: `<PRODUCT_CODE>_IBM_PRODUCT_CODE=<value>` MUST be present when section exists (never N/A for detected products)
+3. **Install Keys**: `<PRODUCT_CODE>_INSTALL_STATUS`, `<PRODUCT_CODE>_INSTALL_COUNT`, `<PRODUCT_CODE>_INSTALL_PATHS`
+4. **Running Keys**: `<PRODUCT_CODE>_RUNNING_STATUS`, `<PRODUCT_CODE>_RUNNING_COUNT`, `<PRODUCT_CODE>_RUNNING_COMMANDLINES`
+
+**Product Status Logic:**
+- `<PRODUCT_CODE>,present`: Product is either running OR installed (or both) - section exists in CSV
+- Products that are neither running nor installed: NO section created (omitted entirely from CSV)
+- IBM product codes are populated for ALL detected products (only when sections exist)
+
+**Configuration:**
 - Products are mapped to appropriate license codes based on node type (PROD/NON_PROD)
-- Configuration is stored in `product-detection-config.csv` and `node-config.conf`
-- Results are added to CSV output as `<PRODUCT_CODE>,<STATUS>` where STATUS is "present" or "absent"
+- Configuration stored in `product-detection-config.csv` and `node-config.conf`
+- Disk detection can be enabled/disabled per product via CSV configuration
 
 **Example Output:**
-```
-IS_ONP_PRD,absent      # Integration Server On-premises Production (not running)
-BRK_ONP_PRD,present    # Broker On-premises Production (running)
+```csv
+# Product detected as installed but not running:
+IS_ONP_PRD,present
+IS_ONP_PRD_IBM_PRODUCT_CODE,D0YYWZX
+IS_ONP_PRD_INSTALL_STATUS,installed
+IS_ONP_PRD_INSTALL_COUNT,7
+IS_ONP_PRD_INSTALL_PATHS,/app/webmethods/ISFE65/IntegrationServer;/app/webmethods/ISFE02/IntegrationServer
+IS_ONP_PRD_RUNNING_STATUS,not-running
+IS_ONP_PRD_RUNNING_COUNT,0
+IS_ONP_PRD_RUNNING_COMMANDLINES,
+
+# Product detected as running and installed:
+IS_ONP_NPR,present
+IS_ONP_NPR_IBM_PRODUCT_CODE,D0YZ2ZX
+IS_ONP_NPR_INSTALL_STATUS,installed
+IS_ONP_NPR_INSTALL_COUNT,19
+IS_ONP_NPR_INSTALL_PATHS,/app/webmethods/ISFE80/IntegrationServer;...
+IS_ONP_NPR_RUNNING_STATUS,running
+IS_ONP_NPR_RUNNING_COUNT,3
+IS_ONP_NPR_RUNNING_COMMANDLINES,java -Dwm.is.name=ISFE80...
+
+# Product not detected (no section created - absent products are omitted):
+# BRK_ONP_PRD section omitted entirely when neither running nor installed
 ```
 
 ### Usage Examples

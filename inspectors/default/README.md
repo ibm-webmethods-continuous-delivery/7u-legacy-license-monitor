@@ -152,11 +152,11 @@ The inspector follows a clean separation of concerns:
 **Example Deployment:**
 ```bash
 # Install code (upgradeable)
-/opt/inspector/
+/opt/iwl/default-inspector/
   └── common/detect_system_info.sh
 
 # Centralized configuration (shared, versioned)
-/etc/inspector-config/
+/opt/iwl/default-inspector/
   └── landscape-config/
       ├── ibm-eligible-processors.csv
       ├── ibm-eligible-virt-and-os.csv
@@ -166,14 +166,14 @@ The inspector follows a clean separation of concerns:
           └── node-config.conf
 
 # Data storage (persistent, never deleted during upgrades)
-/var/data/inspector-output/
+/var/data/iwl/default-inspector-output/
   └── YYYYMMDD_HHMMSS/
       └── inspect_output.csv
 
 # Environment configuration
-export IWDLI_HOME=/opt/inspector
-export IWDLI_CONFIG_DIR=/etc/inspector-config
-export IWDLI_DATA_DIR=/var/data/inspector-output
+export IWDLI_HOME=/opt/iwl/default-inspector
+export IWDLI_CONFIG_DIR=/opt/iwl/default-inspector
+export IWDLI_DATA_DIR=/var/data/iwl/default-inspector-output
 ```
 
 ### Directory Structure
