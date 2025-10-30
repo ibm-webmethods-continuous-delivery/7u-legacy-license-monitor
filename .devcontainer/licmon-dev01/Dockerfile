@@ -2,9 +2,9 @@ ARG __alpine_version=3.22.0
 FROM alpine:${__alpine_version}
 
 # Alpine packages versions: https://pkgs.alpinelinux.org/
-ARG __curl_version=8.14.1-r1
+ARG __curl_version=8.14.1-r2
 ARG __git_version=2.49.1-r0
-ARG __go_version=1.24.4-r0
+ARG __go_version=1.24.9-r0
 ARG __make_version=4.4.1-r3
 ARG __mandoc_version=1.14.6-r13
 ARG __musl_dev_version=1.2.5-r10
