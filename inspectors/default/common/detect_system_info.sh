@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# shellcheck disable=SC2129
+#
 # Copyright IBM Corp. 2025 - 2025
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -47,7 +49,7 @@ DETECT_INSTALL_COUNT=""
 DETECT_INSTALL_PATHS=""
 
 # Global variable for output file
-OUTPUT_FILE=""
+__output_file=""
 
 # Global variable for script directory (to find CSV files)
 SCRIPT_DIR=""
@@ -55,21 +57,23 @@ SCRIPT_DIR=""
 # Global variable for output directory and session folder
 OUTPUT_DIR=""
 SESSION_DIR=""
-SESSION_LOG=""
+__session_log=""
+__config_dir=${IWDLI_CONFIG_DIR:-$HOME/ops/iwdli-config}
+__landscape_dir=${IWDLI_LANDSCAPE_DIR:-$HOME/ops/iwdli-config/landscape}
 
 # Function to write a parameter-value pair to CSV
 write_csv() {
     local parameter="$1"
     local value="$2"
-    echo "${parameter},${value}" >> "$OUTPUT_FILE"
+    echo "${parameter},${value}" >> "$__output_file"
     logD "CSV: ${parameter}=${value}"
 }
 
 # Function to log important information
 log() {
     echo "[INFO] $1" >&2
-    if [ -n "$SESSION_LOG" ]; then
-        echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
+    if [ -n "$__session_log" ]; then
+        echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$__session_log"
     fi
 }
 
@@ -77,8 +81,8 @@ log() {
 logD() {
     if [ "$IWDLI_DEBUG" = "ON" ]; then
         echo "[DEBUG] $1" >&2
-        if [ -n "$SESSION_LOG" ]; then
-            echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$SESSION_LOG"
+        if [ -n "$__session_log" ]; then
+            echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$__session_log"
         fi
     fi
 }
@@ -2053,30 +2057,30 @@ main() {
     # shellcheck disable=SC3028
     hostname_short=$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")
     # Set output file and session log
-    OUTPUT_FILE="${SESSION_DIR}/../iwdli_output_${hostname_short}_${TIMESTAMP}.csv"
-    SESSION_LOG="${SESSION_DIR}/iwdli_session.log"
+    __output_file="${SESSION_DIR}/../iwdli_output_${hostname_short}_${TIMESTAMP}.csv"
+    __session_log="${SESSION_DIR}/iwdli_session.log"
     
     # Initialize session log
-    echo "=== System Detection Session Started ===" >> "$SESSION_LOG"
-    echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
-    echo "Session Directory: $SESSION_DIR" >> "$SESSION_LOG"
-    echo "Script Directory: $SCRIPT_DIR" >> "$SESSION_LOG"
-    echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$SESSION_LOG"
-    echo "Output Directory: ${OUTPUT_DIR}" >> "$SESSION_LOG"
-    echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$SESSION_LOG"
-    echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$SESSION_LOG"
-    echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$SESSION_LOG"
-    echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$SESSION_LOG"
-    echo "=========================================" >> "$SESSION_LOG"
-    echo "" >> "$SESSION_LOG"
+    echo "=== System Detection Session Started ===" >> "$__session_log"
+    echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$__session_log"
+    echo "Session Directory: $SESSION_DIR" >> "$__session_log"
+    echo "Script Directory: $SCRIPT_DIR" >> "$__session_log"
+    echo "Config Base Directory: ${CONFIG_BASE_DIR}" >> "$__session_log"
+    echo "Output Directory: ${OUTPUT_DIR}" >> "$__session_log"
+    echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$__session_log"
+    echo "Config Dir (env): ${IWDLI_CONFIG_DIR:-<not set>}" >> "$__session_log"
+    echo "Data Dir (env): ${IWDLI_DATA_DIR:-<not set>}" >> "$__session_log"
+    echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$__session_log"
+    echo "=========================================" >> "$__session_log"
+    echo "" >> "$__session_log"
     
     log "Starting system detection"
     log "Session directory: ${SESSION_DIR}"
-    log "Output file: ${OUTPUT_FILE}"
-    log "Session log: ${SESSION_LOG}"
+    log "Output file: ${__output_file}"
+    log "Session log: ${__session_log}"
     
     # Create CSV file with header
-    echo "Parameter,Value" > "$OUTPUT_FILE"
+    echo "Parameter,Value" > "$__output_file"
     write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     write_csv "session_directory" "$SESSION_DIR"
     
@@ -2102,14 +2106,14 @@ main() {
     # Detect running webMethods products
     detect_products
     
-    log "Detection complete. Results written to: ${OUTPUT_FILE}"
-    log "Session log available at: ${SESSION_LOG}"
+    log "Detection complete. Results written to: ${__output_file}"
+    log "Session log available at: ${__session_log}"
     
     # Final session log entry
-    echo "" >> "$SESSION_LOG"
-    echo "=== System Detection Session Completed ===" >> "$SESSION_LOG"
-    echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$SESSION_LOG"
-    echo "==========================================" >> "$SESSION_LOG"
+    echo "" >> "$__session_log"
+    echo "=== System Detection Session Completed ===" >> "$__session_log"
+    echo "End Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$__session_log"
+    echo "==========================================" >> "$__session_log"
 }
 
 # Execute main function with all arguments
