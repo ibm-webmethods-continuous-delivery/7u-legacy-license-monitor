@@ -1,0 +1,27 @@
+Parameter,Value
+detection_timestamp,2025-10-30T10:00:00Z
+session_audit_directory,/tmp/mungurea/iwdli/audit/2025-10-30_100000
+OS_NAME,Solaris
+OS_VERSION,10
+CPU_COUNT,       8
+IS_VIRTUALIZED,no
+VIRT_TYPE,none
+PROCESSOR_VENDOR,Unknown
+PROCESSOR_BRAND,Unknown
+HOST_PHYSICAL_CPUS,unknown
+PARTITION_CPUS,unknown
+PHYSICAL_HOST_ID,ix40
+HOST_ID_METHOD,physical-hostname
+HOST_ID_CONFIDENCE,high
+PROCESSOR_ELIGIBLE,false
+OS_ELIGIBLE,true
+VIRT_ELIGIBLE,false
+CONSIDERED_CPUS,       8
+IS_ONP_NPR,present
+IS_ONP_NPR_IBM_PRODUCT_CODE,D0YZ2ZX
+IS_ONP_NPR_RUNNING_STATUS,not-running
+IS_ONP_NPR_RUNNING_COUNT,0
+IS_ONP_NPR_RUNNING_COMMANDLINES,
+IS_ONP_NPR_INSTALL_STATUS,installed
+IS_ONP_NPR_INSTALL_COUNT,      17
+IS_ONP_NPR_INSTALL_PATHS,/app/webmethods/ISFE05/IntegrationServer;/app/webmethods/ISFE11/IntegrationServer;/app/webmethods/ISFE02/IntegrationServer;/app/webmethods/ISFE06/IntegrationServer;/app/webmethods/ISFE50/IntegrationServer;/app/webmethods/ISFE01/IntegrationServer;/app/webmethods/ISFECC/IntegrationServer;/app/webmethods/ISFE03/IntegrationServer;/app/webmethods/ISFE09/IntegrationServer;/app/webmethods/ISAdmin/IntegrationServer;/app/webmethods/ISFETomTom/IntegrationServer;/app/webmethods/ISFETVB/IntegrationServer;/app/webmethods/ISFE60/IntegrationServer;/app/webmethods/ISFE04/IntegrationServer;/app/webmethods/IS31/IntegrationServer;/app/webmethods/ISFE21/IntegrationServer;/app/webmethods/ISFE07/IntegrationServer

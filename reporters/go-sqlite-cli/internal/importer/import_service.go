@@ -246,7 +246,7 @@ func (s *ImportService) insertMeasurement(tx *sql.Tx, mainFQDN string, record *C
 	`,
 		mainFQDN,
 		record.Timestamp,
-		record.GetSystemField("session_directory"),
+		record.GetSystemField("session_audit_directory"), // CSV field name is session_audit_directory
 		record.GetSystemField("OS_NAME"),
 		record.GetSystemField("OS_VERSION"),
 		cpuCount,
@@ -281,16 +281,22 @@ func (s *ImportService) insertDetectedProduct(tx *sql.Tx, mainFQDN string, times
 	result, err := tx.Exec(`
 		INSERT INTO detected_products (
 			main_fqdn, product_mnemo_code, detection_timestamp,
-			status, install_count, created_at
-		) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+			status, running_status, running_count, install_status, install_count, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(main_fqdn, product_mnemo_code, detection_timestamp) DO UPDATE SET
 			status = excluded.status,
+			running_status = excluded.running_status,
+			running_count = excluded.running_count,
+			install_status = excluded.install_status,
 			install_count = excluded.install_count
 	`,
 		mainFQDN,
 		detection.ProductCode,
 		timestamp,
 		detection.Status,
+		getFieldWithDefault(detection.RunningStatus, "unknown"),
+		detection.RunningCount,
+		getFieldWithDefault(detection.InstallStatus, "unknown"),
 		detection.InstallCount,
 	)
 
@@ -303,6 +309,14 @@ func (s *ImportService) insertDetectedProduct(tx *sql.Tx, mainFQDN string, times
 	isNew := rowsAffected == 1
 
 	return isNew, nil
+}
+
+// getFieldWithDefault returns value or default if empty
+func getFieldWithDefault(value, defaultValue string) string {
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 // insertImportSession records the import session

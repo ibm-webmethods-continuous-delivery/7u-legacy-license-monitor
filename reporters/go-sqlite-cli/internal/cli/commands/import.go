@@ -33,6 +33,8 @@ var (
 	processedDir      string
 	discardsDir       string
 	loadReference     bool
+	referenceDir      string
+	licenseTermsPath  string
 	productCodesPath  string
 )
 
@@ -82,9 +84,13 @@ Example:
 	cmd.Flags().StringVar(&discardsDir, "discards-dir", "",
 		"Discarded files directory (default: <parent>/discards)")
 	cmd.Flags().BoolVar(&loadReference, "load-reference", false,
-		"Load reference data (product codes) before importing")
+		"Load reference data (license terms and product codes) before importing")
+	cmd.Flags().StringVar(&referenceDir, "reference-dir", "",
+		"Directory containing reference CSV files (license-terms.csv and product-codes.csv)")
+	cmd.Flags().StringVar(&licenseTermsPath, "license-terms", "",
+		"Path to license-terms.csv file (overrides reference-dir)")
 	cmd.Flags().StringVar(&productCodesPath, "product-codes", "",
-		"Path to product-codes.csv file (required with --load-reference)")
+		"Path to product-codes.csv file (overrides reference-dir)")
 
 	return cmd
 }
@@ -161,15 +167,51 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	// Load reference data if requested
 	if loadReference {
-		if productCodesPath == "" {
-			return fmt.Errorf("--product-codes must be specified with --load-reference")
+		// Determine paths for license terms and product codes
+		var ltPath, pcPath string
+		
+		if referenceDir != "" {
+			// Use reference directory
+			ltPath = filepath.Join(referenceDir, "license-terms.csv")
+			pcPath = filepath.Join(referenceDir, "product-codes.csv")
+		}
+		
+		// Override with specific paths if provided
+		if licenseTermsPath != "" {
+			ltPath = licenseTermsPath
+		}
+		if productCodesPath != "" {
+			pcPath = productCodesPath
+		}
+		
+		// Validate that we have paths
+		if ltPath == "" || pcPath == "" {
+			return fmt.Errorf("--reference-dir or both --license-terms and --product-codes must be specified with --load-reference")
 		}
 
 		fmt.Println("Loading reference data...")
 		loader := importer.NewReferenceDataLoader(db)
-		if err := loader.LoadProductCodesCSV(productCodesPath); err != nil {
-			return fmt.Errorf("failed to load product codes: %w", err)
+		
+		// Load license terms first (product codes reference them)
+		if _, err := os.Stat(ltPath); err == nil {
+			fmt.Printf("Loading license terms from: %s\n", ltPath)
+			if err := loader.LoadLicenseTermsCSV(ltPath); err != nil {
+				return fmt.Errorf("failed to load license terms: %w", err)
+			}
+		} else {
+			fmt.Printf("Warning: License terms file not found: %s\n", ltPath)
 		}
+		
+		// Load product codes
+		if _, err := os.Stat(pcPath); err == nil {
+			fmt.Printf("Loading product codes from: %s\n", pcPath)
+			if err := loader.LoadProductCodesCSV(pcPath); err != nil {
+				return fmt.Errorf("failed to load product codes: %w", err)
+			}
+		} else {
+			return fmt.Errorf("product codes file not found: %s", pcPath)
+		}
+		
 		fmt.Println()
 	}
 

@@ -1,8 +1,18 @@
+# Acceptance test artifacts - ignore everything except README files and directory structure
+# All test databases, generated files, and outputs
+
+# Test databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Test output
-test-data/*.db
 test-data/*.log
 test-data/temp-*
-
-# Test results
 *.output
 *.result
+
+# Keep README files for documentation
+!README*.md
+!**/README*.md

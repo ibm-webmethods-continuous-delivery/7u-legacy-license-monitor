@@ -91,6 +91,9 @@ type DetectedProduct struct {
 	ProductMnemoCode   string    `json:"product_mnemo_code" db:"product_mnemo_code"`
 	DetectionTimestamp time.Time `json:"detection_timestamp" db:"detection_timestamp"`
 	Status             string    `json:"status" db:"status"` // present or absent
+	RunningStatus      string    `json:"running_status" db:"running_status"` // running, not-running, unknown
+	RunningCount       int       `json:"running_count" db:"running_count"`
+	InstallStatus      string    `json:"install_status" db:"install_status"` // installed, not-installed, unknown
 	InstallCount       int       `json:"install_count" db:"install_count"`
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
 }

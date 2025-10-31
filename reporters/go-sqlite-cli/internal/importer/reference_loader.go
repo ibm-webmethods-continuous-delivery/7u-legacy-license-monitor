@@ -33,6 +33,101 @@ func NewReferenceDataLoader(db *sql.DB) *ReferenceDataLoader {
 	return &ReferenceDataLoader{db: db}
 }
 
+// LoadLicenseTermsCSV loads license terms from CSV file
+// CSV format: license-terms-id,program-number,program-name
+func (l *ReferenceDataLoader) LoadLicenseTermsCSV(filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.FieldsPerRecord = -1 // Allow variable number of fields
+	reader.TrimLeadingSpace = true
+
+	// Read header
+	header, err := reader.Read()
+	if err != nil {
+		return fmt.Errorf("failed to read header: %w", err)
+	}
+
+	// Validate header
+	expectedHeader := []string{"license-terms-id", "program-number", "program-name"}
+	if !equalHeaders(header, expectedHeader) {
+		return fmt.Errorf("invalid CSV header, expected: %v", expectedHeader)
+	}
+
+	tx, err := l.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	insertedCount := 0
+	updatedCount := 0
+
+	// Read records
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read row: %w", err)
+		}
+
+		if len(row) < 3 {
+			continue // Skip incomplete rows
+		}
+
+		termID := strings.TrimSpace(row[0])
+		programNumber := strings.TrimSpace(row[1])
+		programName := strings.TrimSpace(row[2])
+
+		if termID == "" || programNumber == "" {
+			continue // Skip rows with missing required fields
+		}
+
+		// Check if license term already exists
+		var count int
+		err = tx.QueryRow("SELECT COUNT(*) FROM license_terms WHERE term_id = ?", termID).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("failed to check license term existence: %w", err)
+		}
+
+		if count == 0 {
+			// Insert new license term
+			_, err = tx.Exec(`
+				INSERT INTO license_terms (term_id, program_number, program_name)
+				VALUES (?, ?, ?)
+			`, termID, programNumber, programName)
+			if err != nil {
+				return fmt.Errorf("failed to insert license term %s: %w", termID, err)
+			}
+			insertedCount++
+		} else {
+			// Update existing license term
+			_, err = tx.Exec(`
+				UPDATE license_terms 
+				SET program_number = ?, program_name = ?, updated_at = CURRENT_TIMESTAMP
+				WHERE term_id = ?
+			`, programNumber, programName, termID)
+			if err != nil {
+				return fmt.Errorf("failed to update license term %s: %w", termID, err)
+			}
+			updatedCount++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	fmt.Printf("License terms loaded: %d inserted, %d updated\n", insertedCount, updatedCount)
+	return nil
+}
+
 // LoadProductCodesCSV loads product codes from CSV file
 // CSV format: product-mnemo-id,product-code,product-name,mode,license-terms-id,notes
 func (l *ReferenceDataLoader) LoadProductCodesCSV(filePath string) error {

@@ -1,0 +1,27 @@
+Parameter,Value
+detection_timestamp,2025-10-24T10:00:00Z
+session_audit_directory,/tmp/mungurea/iwdli/audit/2025-10-24_100000
+OS_NAME,AIX
+OS_VERSION,7.200
+CPU_COUNT,16
+IS_VIRTUALIZED,yes
+VIRT_TYPE,PowerVM - Micro-Partitioning
+PROCESSOR_VENDOR,IBM
+PROCESSOR_BRAND,POWER8
+HOST_PHYSICAL_CPUS,48
+PARTITION_CPUS,48
+PHYSICAL_HOST_ID,aix-machine-00FAF22C4C00
+HOST_ID_METHOD,uname-machine
+HOST_ID_CONFIDENCE,high
+PROCESSOR_ELIGIBLE,true
+OS_ELIGIBLE,true
+VIRT_ELIGIBLE,true
+CONSIDERED_CPUS,16
+IS_ONP_NPR,present
+IS_ONP_NPR_IBM_PRODUCT_CODE,D0YZ2ZX
+IS_ONP_NPR_RUNNING_STATUS,running
+IS_ONP_NPR_RUNNING_COUNT,1
+IS_ONP_NPR_RUNNING_COMMANDLINES,89:04 /app/webmethods/ISFE0810/jvm/jvm/bin/java -Dosgi.install.area=/app/webmethods/ISFE0810/profiles/IS_default -Declipse.ignoreApp=true -Dosgi.noShutdown=true -Dlog4j.configurationFile=/app/webmethods/ISFE0810/profiles/IS_default/configuration/logging/log4j2.properties -Xbootclasspath/a:/app/webmethods/ISFE0810/common/runtime/bundles/platform/eclipse/plugins/com.softwareag.platform.jaas.proxy_10.15.0.0000-0574.jar:/app/webmethods/ISFE0810/common/runtime/bundles/platform/eclipse/plugins/com.softwareag.platform.logging.jul.proxy_10.15.0.0000-0574.jar:/app/webmethods/ISFE0810/common/runtime/bundles/platform/eclipse/plugins/com.softwareag.platform.logging.jul.proxy_10.15.0.0000-0574.jar -Djava.io.tmpdir=/app/webmethods/ISFE0810/profiles/IS_default/workspace/temp -Dlog4j2.disable.jmx=true -Djava.util.logging.manager=com.softwareag.platform.jul.proxy.ProxyLogManager -DLog4jContextSelector=org.apache.logging.log4j.core.selector.BasicContextSelector -server -Dorg.apache.xml.dtm.DTMManager=org.apache.xml.dtm.ref.DTMManagerDefault -Djavax.xml.xpath.XPathFactory:http://java.sun.com/jaxp/xpath/dom=com.sun.org.apache.xpath.internal.jaxp.XPathFactoryImpl -Dcom.webmethods.sc.auditing.Use80TableFormat=true -Dsun.lang.ClassLoader.allowArraySyntax=true -Djava.security.properties=config/security/webm_override_java.security -DWM_HOME=/app/webmethods/ISFE0810 -Dwatt.server.prepend.classes= -Dwatt.server.append.classes= -Dlog4j.configurationFile=/app/webmethods/ISFE0810/profiles/IS_default/configuration/logging/log4j2.properties,.tc.custom.log4j2.properties -Dorg.tanukisoftware.wrapper.WrapperStartStopApp.passthroughMode=START -Djava.awt.headless=true -DLog4jContextSelector=org.apache.logging.log4j.core.selector.BasicContextSelector -Djdk.security.auth.login.useCachedLoginModules=true -Xms256m -Xmx1024m -Djava.library.path=/app/webmethods/ISFE0810/common/lib/tw-3.5.50:/app/webmethods/ISFE0810/common/lib:/app/webmethods/ISFE0810/common/security/ssx/lib:/app/webmethods/ISFE0810/IntegrationServer/instances/default/lib -classpath /app/webmethods/ISFE0810/common/lib/tw-3.5.50/wrapper.jar:/app/webmethods/ISFE0810/common/runtime/bundles/platform/eclipse/plugins/com.softwareag.platform.bootstrap_10.15.0.0000-0574.jar:/app/webmethods/ISFE0810/common/runtime/bundles/platform/eclipse/plugins/org.eclipse.equinox.launcher_1.5.300.v20190213-1655.jar:/app/webmethods/ISFE0810/common/lib/wm-converters.jar -Dwrapper.key=iVewlVjk1qH0sfJL62axHTGreH41N3jO -Dwrapper.port=32000 -Dwrapper.jvm.port.min=31000 -Dwrapper.jvm.port.max=31999 -Dwrapper.disable_console_input=TRUE -Dwrapper.pid=590740 -Dwrapper.version=3.5.50-st -Dwrapper.native_library=wrapper -Dwrapper.arch=ppc -Dwrapper.ignore_signals=TRUE -Dwrapper.service=TRUE -Dwrapper.cpu.timeout=10 -Dwrapper.jvmid=1 -Dwrapper.lang.domain=wrapper -Dwrapper.lang.folder=../lang org.tanukisoftware.wrapper.WrapperStartStopApp org.eclipse.equinox.launcher.Main 4 -configuration /app/webmethods/ISFE0810/profiles/IS_default/configuration -service sagis1015 com.softwareag.platform.bootstrap.Bootstrap FALSE 1 shutdown -- 
+IS_ONP_NPR_INSTALL_STATUS,installed
+IS_ONP_NPR_INSTALL_COUNT,7
+IS_ONP_NPR_INSTALL_PATHS,/app/webmethods/ISFE65/IntegrationServer;/app/webmethods/ISFE02/IntegrationServer;/app/webmethods/ISFE04/IntegrationServer;/app/webmethods/ISFE0810/IntegrationServer;/app/webmethods/ISFE0810/common/db/IntegrationServer;/app/webmethods/ISFE0910/IntegrationServer;/app/webmethods/ISFE0910/common/db/IntegrationServer

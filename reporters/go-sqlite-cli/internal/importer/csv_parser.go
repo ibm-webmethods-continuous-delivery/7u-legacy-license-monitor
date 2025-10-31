@@ -36,12 +36,15 @@ type CSVRecord struct {
 
 // ProductDetection represents detection data for a product
 type ProductDetection struct {
-	ProductCode       string
-	Status            string // present or absent
-	IBMProductCode    string
-	InstallStatus     string
-	InstallCount      int
-	InstallPaths      []string
+	ProductCode           string
+	Status                string // present or absent
+	IBMProductCode        string
+	RunningStatus         string
+	RunningCount          int
+	RunningCommandlines   string
+	InstallStatus         string
+	InstallCount          int
+	InstallPaths          []string
 }
 
 // ParseCSVFile parses an inspector CSV file in Parameter,Value format
@@ -126,13 +129,13 @@ func ParseCSVFile(filePath string) (*CSVRecord, error) {
 
 // extractHostnameFromFilename extracts hostname from filename pattern
 // Expected pattern: iwdli_output_<hostname>_<timestamp>.csv
-// Timestamp format: YYYYMMDD_HHMMSS (e.g., 20251021_090906)
+// Timestamp format: YYYY-MM-DD_HHMMSS (e.g., 2025-10-31_161910) or YYYYMMDD_HHMMSS (e.g., 20251021_090906)
 func extractHostnameFromFilename(filePath string) (string, error) {
 	filename := filepath.Base(filePath)
 	
 	// Pattern: iwdli_output_<hostname>_<timestamp>.csv
-	// Timestamp is YYYYMMDD_HHMMSS format
-	re := regexp.MustCompile(`^iwdli_output_([^_]+)_\d{8}_\d{6}\.csv$`)
+	// Support both date formats: YYYY-MM-DD_HHMMSS and YYYYMMDD_HHMMSS
+	re := regexp.MustCompile(`^iwdli_output_([^_]+)_\d{4}-?\d{2}-?\d{2}_\d{6}\.csv$`)
 	matches := re.FindStringSubmatch(filename)
 	
 	if len(matches) < 2 {
@@ -146,10 +149,13 @@ func extractHostnameFromFilename(filePath string) (string, error) {
 func isProductField(parameter string) bool {
 	// Product fields follow patterns like:
 	// IS_ONP_PRD, IS_ONP_PRD_IBM_PRODUCT_CODE, IS_ONP_PRD_INSTALL_STATUS, etc.
-	// BRK_ONP_PRD, UM_ONP_PRD, etc.
+	// IS_ONP_NPR, IS_ONP_NPR_IBM_PRODUCT_CODE, IS_ONP_NPR_RUNNING_STATUS, etc.
+	// BRK_ONP_PRD, BRK_ONP_NPR, UM_ONP_PRD, etc.
 	
-	// Check if it contains product code pattern (ends with _PRD or _NONPROD)
-	return strings.Contains(parameter, "_PRD") || strings.Contains(parameter, "_NONPROD")
+	// Check if it contains product code pattern (ends with _PRD, _NPR, or _NONPROD)
+	return strings.Contains(parameter, "_PRD") || 
+	       strings.Contains(parameter, "_NPR") || 
+	       strings.Contains(parameter, "_NONPROD")
 }
 
 // parseProductField parses a product-related field and updates the record
@@ -157,19 +163,21 @@ func parseProductField(record *CSVRecord, parameter, value string) error {
 	// Split parameter to extract product code and field type
 	// Examples:
 	// IS_ONP_PRD -> product code: IS_ONP_PRD, field: (status)
+	// IS_ONP_NPR -> product code: IS_ONP_NPR, field: (status)
 	// IS_ONP_PRD_IBM_PRODUCT_CODE -> product code: IS_ONP_PRD, field: IBM_PRODUCT_CODE
+	// IS_ONP_NPR_RUNNING_STATUS -> product code: IS_ONP_NPR, field: RUNNING_STATUS
 	
 	parts := strings.Split(parameter, "_")
 	if len(parts) < 3 {
 		return fmt.Errorf("invalid product parameter format: %s", parameter)
 	}
 
-	// Find the product code (everything up to and including _PRD or _NONPROD)
+	// Find the product code (everything up to and including _PRD, _NPR, or _NONPROD)
 	var productCode string
 	var fieldType string
 	
 	for i, part := range parts {
-		if part == "PRD" || part == "NONPROD" {
+		if part == "PRD" || part == "NPR" || part == "NONPROD" {
 			productCode = strings.Join(parts[:i+1], "_")
 			if i+1 < len(parts) {
 				fieldType = strings.Join(parts[i+1:], "_")
@@ -198,6 +206,15 @@ func parseProductField(record *CSVRecord, parameter, value string) error {
 		detection.Status = value
 	case "IBM_PRODUCT_CODE":
 		detection.IBMProductCode = value
+	case "RUNNING_STATUS":
+		detection.RunningStatus = value
+	case "RUNNING_COUNT":
+		// Parse running count (may have leading spaces)
+		var count int
+		fmt.Sscanf(value, "%d", &count)
+		detection.RunningCount = count
+	case "RUNNING_COMMANDLINES":
+		detection.RunningCommandlines = value
 	case "INSTALL_STATUS":
 		detection.InstallStatus = value
 	case "INSTALL_COUNT":
