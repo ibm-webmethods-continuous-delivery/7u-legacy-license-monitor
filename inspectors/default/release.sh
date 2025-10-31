@@ -83,6 +83,7 @@ echo "Copying files to release directory..."
 
 # Copy main directories
 cp -r common "$TEMP_DIR/"
+cp -r detection-config "$TEMP_DIR/"
 cp -r landscape-config "$TEMP_DIR/"
 
 # Copy inspector files
