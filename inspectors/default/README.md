@@ -402,18 +402,25 @@ The code/config/data separation allows safe upgrades without losing historical d
 
 ## Output Format
 
-### Session Directory Structure
+### Output Structure
 
-Each execution creates a timestamped directory:
+The inspector creates two types of output in separate locations:
 
+**CSV Data Output** (in `IWDLI_DATA_DIR`):
 ```
-YYYYMMDD_HHMMSS/
-├── inspect_output.csv              # Structured system metrics (main output)
-├── session.log                     # Detailed execution log
-├── ps-aux.out                      # Full process listing (debug mode)
-├── ps-ef.out                       # Full process listing (debug mode)
-├── processes_<product>.out         # Product-specific process details (debug mode)
-└── <command>.out/.err              # Raw command outputs (debug mode)
+data/
+└── iwdli_output_<hostname>_<timestamp>.csv    # Structured system metrics (main output)
+```
+
+**Audit/Debug Output** (in `IWDLI_AUDIT_DIR`):
+```
+audit/
+└── YYYYMMDD_HHMMSS/                           # Timestamped session directories
+    ├── iwdli_session.log                      # Detailed execution log
+    ├── ps-aux.out                             # Full process listing (debug mode)
+    ├── ps-ef.out                              # Full process listing (debug mode)
+    ├── processes_<product>.out                # Product-specific process details (debug mode)
+    └── <command>.out/.err                     # Raw command outputs (debug mode)
 ```
 
 ### CSV Output Schema

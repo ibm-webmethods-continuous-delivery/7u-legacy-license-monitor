@@ -55,7 +55,7 @@ for file in $repo_root_files; do
 done
 
 # Check required directories
-required_dirs="common landscape-config"
+required_dirs="common detection-config landscape-config"
 for dir in $required_dirs; do
     if [ ! -d "$dir" ]; then
         missing_files="$missing_files $dir/"
@@ -100,7 +100,7 @@ fi
 # Create install script
 echo "Creating install.sh script..."
 cat > "$TEMP_DIR/install.sh" << 'EOF'
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright IBM Corp. 2025 - 2025
 # SPDX-License-Identifier: Apache-2.0
@@ -141,6 +141,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "Installing files..."
 cp -r "$SCRIPT_DIR/common" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/landscape-config" "$INSTALL_DIR/"
+cp -r "$SCRIPT_DIR/detection-config" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/test.sh" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
 
