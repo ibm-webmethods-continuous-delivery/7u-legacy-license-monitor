@@ -1,5 +1,5 @@
 -- Database Schema for IBM webMethods License Monitor
--- Version: 1.2.0
+-- Version: 1.3.0
 -- Last Updated: 2025-10-31
 --
 -- Based on REQUIREMENTS.md data model for license monitoring
@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS measurements (
     main_fqdn TEXT NOT NULL,
     detection_timestamp DATETIME NOT NULL,
     session_directory TEXT DEFAULT '',
+    node_type TEXT DEFAULT 'PROD' CHECK (node_type IN ('PROD', 'NON_PROD')),
+    environment TEXT DEFAULT 'Production',
+    inspection_level TEXT DEFAULT 'full',
+    node_fqdn TEXT DEFAULT '',
     os_name TEXT NOT NULL,
     os_version TEXT NOT NULL,
     cpu_count INTEGER NOT NULL,

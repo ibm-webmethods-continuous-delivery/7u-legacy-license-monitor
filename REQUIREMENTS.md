@@ -171,6 +171,53 @@ Inspectors create session-based output directories with the following structure:
 │   └── <command>.out/.err    # Raw command outputs (when debug mode enabled)
 ```
 
+### Node Configuration Metadata
+
+Each inspector output includes node configuration metadata sourced from `node-config.conf` files. These configuration files are located in the landscape-config directory hierarchy with hostname-specific overrides.
+
+**Configuration File Locations** (in priority order):
+1. `landscape-config/<hostname>/node-config.conf` - Host-specific configuration
+2. `common/node-config.conf` - Fallback configuration
+
+**Configuration Parameters:**
+
+| Parameter | Description | Values | Default |
+|-----------|-------------|--------|---------|
+| `NODE_TYPE` | Production vs non-production designation | `PROD`, `NON_PROD` | `PROD` |
+| `ENVIRONMENT` | Environment name/label | Any string (e.g., "Production", "test", "UAT") | `Production` |
+| `INSPECTION_LEVEL` | Inspection depth | `full`, `basic`, `minimal` | `full` |
+| `NODE_FQDN` | Fully qualified domain name | Hostname with domain | `$(hostname).local` |
+
+**CSV Output Fields:**
+
+The inspector writes these configuration values early in the CSV output:
+```csv
+Parameter,Value
+detection_timestamp,2025-10-31T22:39:03Z
+session_audit_directory,/tmp/iwdli-home/audit/2025-10-31_223903
+node_type,PROD
+environment,Production
+inspection_level,full
+node_fqdn,hostname.example.com
+```
+
+**Configuration File Format:**
+
+Example `node-config.conf`:
+```properties
+# Node Configuration File
+NODE_TYPE=PROD
+ENVIRONMENT=Production
+INSPECTION_LEVEL=full
+NODE_FQDN=server01.example.com
+```
+
+**Usage:** These metadata fields enable:
+- Proper mapping of products to production vs non-production license terms
+- Environment-based reporting and filtering
+- FQDN-based host identification for correlation
+- Inspection level tracking for audit purposes
+
 ### Product Detection
 
 The inspector detects webMethods products through both process scanning and disk-based installation detection:

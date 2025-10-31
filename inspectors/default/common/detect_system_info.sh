@@ -1608,7 +1608,11 @@ show_usage() {
 
 # Function to load node configuration based on hostname
 load_node_config() {
-  NODE_TYPE="PROD"  # Default to PROD
+  # Set defaults for all configuration parameters
+  NODE_TYPE="PROD"
+  ENVIRONMENT="Production"
+  INSPECTION_LEVEL="full"
+  NODE_FQDN="${hostname_short}.local"
     
   # Look for hostname-specific directory in landscape-config
   host_config_dir=""
@@ -1651,14 +1655,22 @@ load_node_config() {
     
   if [ -n "$node_config_file" ] && [ -f "$node_config_file" ]; then
     logD "Loading node configuration from: $node_config_file"
-    # Source the config file to get NODE_TYPE
+    # Source the config file to get NODE_TYPE, ENVIRONMENT, INSPECTION_LEVEL, NODE_FQDN
     # shellcheck source=/dev/null
     . "$node_config_file" 2>/dev/null || {
       logD "Warning: Could not source node configuration file"
     }
-    logD "Node type set to: $NODE_TYPE"
+    logD "Node configuration loaded:"
+    logD "  NODE_TYPE: $NODE_TYPE"
+    logD "  ENVIRONMENT: $ENVIRONMENT"
+    logD "  INSPECTION_LEVEL: $INSPECTION_LEVEL"
+    logD "  NODE_FQDN: $NODE_FQDN"
   else
-    logD "Node configuration file not found, using default: $NODE_TYPE"
+    logD "Node configuration file not found, using defaults:"
+    logD "  NODE_TYPE: $NODE_TYPE"
+    logD "  ENVIRONMENT: $ENVIRONMENT"
+    logD "  INSPECTION_LEVEL: $INSPECTION_LEVEL"
+    logD "  NODE_FQDN: $NODE_FQDN"
   fi
 }
 
@@ -1887,8 +1899,8 @@ detect_products() {
         exit 1
     fi
     
-    # Load node configuration to determine PROD/NON_PROD
-    load_node_config
+    # Note: load_node_config() is now called in main() before detect_products()
+    # NODE_TYPE is already available for product detection
     
     # If debug mode is on, capture the full process listing once before filtering
     if [ "${IWDLI_DEBUG}" = "ON" ]; then
@@ -2123,6 +2135,15 @@ main() {
   echo "Parameter,Value" > "$iwdli_output_file"
   write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   write_csv "session_audit_directory" "$iwdli_session_audit_dir"
+  
+  # Load node configuration early to populate NODE_TYPE, ENVIRONMENT, INSPECTION_LEVEL, NODE_FQDN
+  load_node_config
+  
+  # Write node configuration fields to CSV (early in output for visibility)
+  write_csv "node_type" "$NODE_TYPE"
+  write_csv "environment" "$ENVIRONMENT"
+  write_csv "inspection_level" "$INSPECTION_LEVEL"
+  write_csv "node_fqdn" "$NODE_FQDN"
     
   # Detect system information
   detect_os

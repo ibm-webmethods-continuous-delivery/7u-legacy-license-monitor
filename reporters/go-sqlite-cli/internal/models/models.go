@@ -66,6 +66,10 @@ type Measurement struct {
 	MainFQDN           string    `json:"main_fqdn" db:"main_fqdn"`
 	DetectionTimestamp time.Time `json:"detection_timestamp" db:"detection_timestamp"`
 	SessionDirectory   string    `json:"session_directory" db:"session_directory"`
+	NodeType           string    `json:"node_type" db:"node_type"`
+	Environment        string    `json:"environment" db:"environment"`
+	InspectionLevel    string    `json:"inspection_level" db:"inspection_level"`
+	NodeFQDN           string    `json:"node_fqdn" db:"node_fqdn"`
 	OSName             string    `json:"os_name" db:"os_name"`
 	OSVersion          string    `json:"os_version" db:"os_version"`
 	CPUCount           int       `json:"cpu_count" db:"cpu_count"`

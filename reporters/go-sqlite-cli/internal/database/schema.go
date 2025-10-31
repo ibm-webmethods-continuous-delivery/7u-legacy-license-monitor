@@ -23,5 +23,5 @@ var SchemaSQL string
 
 // GetSchemaVersion returns the current schema version
 func GetSchemaVersion() string {
-	return "1.2.0" // Updated to include ibm_product_code in v_daily_product_summary view
+	return "1.3.0" // Updated to include node_type, environment, inspection_level, node_fqdn in measurements table
 }

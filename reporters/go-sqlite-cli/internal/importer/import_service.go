@@ -218,15 +218,20 @@ func (s *ImportService) insertMeasurement(tx *sql.Tx, mainFQDN string, record *C
 	result, err := tx.Exec(`
 		INSERT INTO measurements (
 			main_fqdn, detection_timestamp, session_directory,
+			node_type, environment, inspection_level, node_fqdn,
 			os_name, os_version, cpu_count,
 			is_virtualized, virt_type, processor_vendor, processor_brand,
 			host_physical_cpus, partition_cpus,
 			processor_eligible, os_eligible, virt_eligible,
 			considered_cpus, physical_host_id, host_id_method, host_id_confidence,
 			created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(main_fqdn, detection_timestamp) DO UPDATE SET
 			session_directory = excluded.session_directory,
+			node_type = excluded.node_type,
+			environment = excluded.environment,
+			inspection_level = excluded.inspection_level,
+			node_fqdn = excluded.node_fqdn,
 			os_name = excluded.os_name,
 			os_version = excluded.os_version,
 			cpu_count = excluded.cpu_count,
@@ -247,6 +252,10 @@ func (s *ImportService) insertMeasurement(tx *sql.Tx, mainFQDN string, record *C
 		mainFQDN,
 		record.Timestamp,
 		record.GetSystemField("session_audit_directory"), // CSV field name is session_audit_directory
+		record.GetSystemFieldWithDefault("node_type", "PROD"),
+		record.GetSystemFieldWithDefault("environment", "Production"),
+		record.GetSystemFieldWithDefault("inspection_level", "full"),
+		record.GetSystemFieldWithDefault("node_fqdn", mainFQDN),
 		record.GetSystemField("OS_NAME"),
 		record.GetSystemField("OS_VERSION"),
 		cpuCount,
