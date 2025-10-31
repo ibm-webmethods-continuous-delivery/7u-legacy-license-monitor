@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright IBM Corp. 2025 - 2025
 # SPDX-License-Identifier: Apache-2.0
@@ -23,18 +23,19 @@ DETECT_SCRIPT="${SCRIPT_DIR}/common/detect_system_info.sh"
 # Create test base directory with timestamp
 TEST_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TEST_LABEL=${TEST_LABEL:-default}
-TEST_BASE_DIR="/tmp/iwdlm/test/${TEST_LABEL}/${TEST_TIMESTAMP}"
+TEST_BASE_DIR=${TEST_BASE_DIR:-/tmp/iwdlm/test}
+TEST_SESSION_DIR="${TEST_BASE_DIR}/${TEST_LABEL}/${TEST_TIMESTAMP}"
 
 # Test subdirectories
-TEST_01_DIR="${TEST_BASE_DIR}/test-01-debug-on"
-TEST_02_DIR="${TEST_BASE_DIR}/test-02-debug-off-normal"
-TEST_03_DIR="${TEST_BASE_DIR}/test-03-debug-off-redirected"
-TEST_04_DIR="${TEST_BASE_DIR}/test-04-raw-commands"
-TEST_05_DIR="${TEST_BASE_DIR}/test-05-permission-check"
-TEST_06_DIR="${TEST_BASE_DIR}/test-06-config-validation"
+TEST_01_DIR="${TEST_SESSION_DIR}/test-01-debug-on"
+TEST_02_DIR="${TEST_SESSION_DIR}/test-02-debug-off-normal"
+TEST_03_DIR="${TEST_SESSION_DIR}/test-03-debug-off-redirected"
+TEST_04_DIR="${TEST_SESSION_DIR}/test-04-raw-commands"
+TEST_05_DIR="${TEST_SESSION_DIR}/test-05-permission-check"
+TEST_06_DIR="${TEST_SESSION_DIR}/test-06-config-validation"
 
 # Summary file
-TEST_SUMMARY="${TEST_BASE_DIR}/test_summary.txt"
+TEST_SUMMARY="${TEST_SESSION_DIR}/test_summary.txt"
 
 TEST_IWDLI_COLORED=${TEST_IWDLI_COLORED:-NO}
 # Note, putting the default on bash to facilitate a bit default test on Solaris 8
@@ -142,7 +143,7 @@ setup_test_environment() {
     
     # Create test directories
     print_step "Creating test directory structure..."
-    mkdir -p "$TEST_BASE_DIR"
+    mkdir -p "$TEST_SESSION_DIR"
     mkdir -p "$TEST_01_DIR"
     mkdir -p "$TEST_02_DIR"
     mkdir -p "$TEST_03_DIR"
@@ -150,7 +151,7 @@ setup_test_environment() {
     mkdir -p "$TEST_05_DIR"
     mkdir -p "$TEST_06_DIR"
     
-    print_success "Test directories created at: ${TEST_BASE_DIR}"
+    print_success "Test directories created at: ${TEST_SESSION_DIR}"
     
     # Verify detection script exists
     print_step "Verifying detection script..."
@@ -166,7 +167,7 @@ setup_test_environment() {
         echo "IBM webMethods Default License Inspector - Test Summary"
         echo "========================================================================"
         echo "Test execution: $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "Test directory: ${TEST_BASE_DIR}"
+        echo "Test session directory: ${TEST_SESSION_DIR}"
         echo "Detection script: ${DETECT_SCRIPT}"
         echo "Hostname: $(hostname 2>/dev/null || echo 'unknown')"
         echo "OS: $(uname -s) $(uname -r)"
@@ -175,7 +176,7 @@ setup_test_environment() {
     } > "$TEST_SUMMARY"
     
     # Set default IWDLI_HOME
-    export IWDLI_HOME="${TEST_BASE_DIR}/iwdli_home"
+    export IWDLI_HOME="${TEST_SESSION_DIR}/iwdli_home"
     mkdir -p "$IWDLI_HOME"
     print_success "IWDLI_HOME set to: ${IWDLI_HOME}"
 }
@@ -618,11 +619,11 @@ test_05_permission_check() {
         echo ""
         
         echo "Test Directory Permissions:"
-        ls -ld "$TEST_BASE_DIR"
+        ls -ld "$TEST_SESSION_DIR"
         echo ""
         
         echo "Disk Space:"
-        df -k "$TEST_BASE_DIR" 2>/dev/null || df -k /tmp
+        df -k "$TEST_SESSION_DIR" 2>/dev/null || df -k /tmp
         echo ""
         
         echo "Current User:"
@@ -747,7 +748,7 @@ generate_final_summary() {
         echo "Test Files Location"
         echo "========================================================================"
         echo "All test artifacts are stored in:"
-        echo "  ${TEST_BASE_DIR}"
+        echo "  ${TEST_SESSION_DIR}"
         echo ""
         echo "Test directories:"
         echo "  - ${TEST_01_DIR} (Debug ON)"
@@ -761,7 +762,7 @@ generate_final_summary() {
         echo "  1. Review summary: cat ${TEST_SUMMARY}"
         echo "  2. Compare test outputs: diff test-01*/output/iwdli_output_*.csv test-02*/output/iwdli_output_*.csv"
         echo "  3. Check raw commands: ls -l ${TEST_04_DIR}"
-        echo "  4. Package for remote analysis: tar -czf test-results.tar.gz ${TEST_BASE_DIR}"
+        echo "  4. Package for remote analysis: tar -czf test-results.tar.gz ${TEST_SESSION_DIR}"
         echo ""
         echo "========================================================================"
     } >> "$TEST_SUMMARY"
@@ -794,7 +795,7 @@ main() {
     generate_final_summary
     
     print_header "All Tests Completed Successfully"
-    print_success "Test results: ${TEST_BASE_DIR}"
+    print_success "Test results: ${TEST_SESSION_DIR}"
     print_success "Test summary: ${TEST_SUMMARY}"
     
     echo ""
@@ -802,11 +803,11 @@ main() {
     echo "  1. Review the test summary file"
     echo "  2. Compare outputs between debug ON and OFF"
     echo "  3. Examine raw command outputs for debugging"
-    echo "  4. Package results: tar -czf test-${TEST_TIMESTAMP}.tar.gz ${TEST_BASE_DIR}"
+    echo "  4. Package results: tar -czf test-${TEST_TIMESTAMP}.tar.gz ${TEST_SESSION_DIR}"
     echo ""
     echo "Transport results back to code authoring space:"
     echo "  On Unix/Linux system:"
-    echo "    tar -czf test-${TEST_TIMESTAMP}.tar.gz ${TEST_BASE_DIR}"
+    echo "    tar -czf test-${TEST_TIMESTAMP}.tar.gz ${TEST_SESSION_DIR}"
     echo "  Then on Windows (PowerShell):"
     echo "    scp user@unix-host:/tmp/iwdlm/test/test-${TEST_TIMESTAMP}.tar.gz m:/r/o/r/c/iwcd/7u-overwatch/r/7u-legacy-license-monitor/local/"
     echo "  Or use WinSCP/FileZilla to transfer the .tar.gz file"

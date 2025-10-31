@@ -153,13 +153,14 @@ fi
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR/common/detect_system_info.sh"
-chmod +x "$INSTALL_DIR/test.sh"
+chmod +x "$INSTALL_DIR/test*.sh"
 
 echo ""
 echo "Installation completed successfully!"
 echo ""
 echo "Installation directory: $INSTALL_DIR"
 echo "Main script: $INSTALL_DIR/common/detect_system_info.sh"
+echo "Meta test script: $INSTALL_DIR/test-meta.sh"
 echo "Test script: $INSTALL_DIR/test.sh"
 echo ""
 echo "To run the inspector:"

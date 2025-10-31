@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright IBM Corp. 2025 - 2025
 # SPDX-License-Identifier: Apache-2.0
@@ -76,7 +76,7 @@ log() {
   __log_time=$(date -u '+%H:%M:%S')
   echo "${__log_time}[INF] $1" >&2
   if [ -n "$iwdli_session_log" ]; then
-      echo "${__log_time}[INF] $1" >> "$iwdli_session_log"
+    echo "${__log_time}[INF] $1" >> "$iwdli_session_log"
   fi
   unset __log_time
 }
@@ -1799,7 +1799,8 @@ detect_product_installations() {
             
             # Apply exclusion pattern if specified
             if [ -n "$exclude_pattern" ]; then
-                if echo "$found_dir" | grep -q "$exclude_pattern"; then
+                # Use grep without -q for Solaris 5.8 compatibility (redirect output to /dev/null)
+                if echo "$found_dir" | grep "$exclude_pattern" >/dev/null 2>&1; then
                     logD "Skipping (excluded): ${found_dir}"
                     continue
                 fi
@@ -1946,15 +1947,16 @@ detect_products() {
         # Initialize detection status flags
         process_running="false"
         installation_detected="false"
-        running_process_count=0
+        __running_process_count=0
         process_cmdlines=""
         
         # Check if any processes match the pattern and count them
         case "$OS_NAME" in
             "AIX"|"Solaris")
                 # Count matching processes
-                running_process_count=$(ps -ef | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
-                if [ "$running_process_count" -gt 0 ]; then
+                __running_process_count=$(ps -ef | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
+                __running_process_count=${__running_process_count:-0}
+                if [ "$__running_process_count" -gt 0 ]; then
                     process_running="true"
                     # Capture command lines for running processes (limit to avoid CSV issues)
                     process_cmdlines=$(ps -ef | grep -v grep | grep "$grep_pattern" | head -3 | awk '{for(i=8;i<=NF;i++) printf "%s ", $i; print ""}' | tr '\n' ';' | sed 's/;$//' 2>/dev/null || echo "")
@@ -1962,8 +1964,9 @@ detect_products() {
                 ;;
             *)
                 # Linux and others
-                running_process_count=$(ps aux | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
-                if [ "$running_process_count" -gt 0 ]; then
+                __running_process_count=$(ps aux | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
+                __running_process_count=${__running_process_count:-0}
+                if [ "$__running_process_count" -gt 0 ]; then
                     process_running="true"
                     # Capture command lines for running processes (limit to avoid CSV issues)
                     process_cmdlines=$(ps aux | grep -v grep | grep "$grep_pattern" | head -3 | awk '{for(i=11;i<=NF;i++) printf "%s ", $i; print ""}' | tr '\n' ';' | sed 's/;$//' 2>/dev/null || echo "")
@@ -1971,7 +1974,7 @@ detect_products() {
                 ;;
         esac
         
-        logD "Process detection for ${product_id}: running=${process_running}, count=${running_process_count}"
+        logD "Process detection for ${product_id}: running=${process_running}, count=${__running_process_count}"
         
         # ========================================
         # PART 2: Disk-based installation detection
@@ -2030,7 +2033,7 @@ detect_products() {
             # Write running status keys
             if [ "$process_running" = "true" ]; then
                 write_csv "${product_id}_RUNNING_STATUS" "running"
-                write_csv "${product_id}_RUNNING_COUNT" "$running_process_count"
+                write_csv "${product_id}_RUNNING_COUNT" "$__running_process_count"
                 write_csv "${product_id}_RUNNING_COMMANDLINES" "$process_cmdlines"
                 
                 # If debug mode is on, capture the specific grep results for this product
@@ -2064,6 +2067,9 @@ detect_products() {
             fi
         fi
         # Note: No CSV keys written for absent products (neither running nor installed)
+        
+        # Clean up private loop variables
+        unset __running_process_count
         
     done < "$product_config_file"
     
