@@ -1966,7 +1966,7 @@ detect_products() {
         case "$OS_NAME" in
             "AIX"|"Solaris")
                 # Count matching processes
-                __running_process_count=$(ps -ef | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
+                __running_process_count=$(ps -ef | grep -v grep | grep -c "$grep_pattern" 2>/dev/null)
                 __running_process_count=${__running_process_count:-0}
                 if [ "$__running_process_count" -gt 0 ]; then
                     process_running="true"
@@ -1976,7 +1976,7 @@ detect_products() {
                 ;;
             *)
                 # Linux and others
-                __running_process_count=$(ps aux | grep -v grep | grep -c "$grep_pattern" 2>/dev/null || echo "0")
+                __running_process_count=$(ps aux | grep -v grep | grep -c "$grep_pattern" 2>/dev/null)
                 __running_process_count=${__running_process_count:-0}
                 if [ "$__running_process_count" -gt 0 ]; then
                     process_running="true"

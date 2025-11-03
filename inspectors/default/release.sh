@@ -143,7 +143,7 @@ echo "Installing files..."
 cp -r "$SCRIPT_DIR/common" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/landscape-config" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/detection-config" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/test.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/test*.sh" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
 
 # Copy license if exists
