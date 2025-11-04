@@ -334,10 +334,10 @@ release-for-aix: build
 	@echo "========================================================================"
 	@echo ""
 	@echo "Package: target/$(BINARY_NAME)-aix72.tar.gz"
-	@echo "Size: $$(du -h target/$(BINARY_NAME)-aix72.tar.gz | cut -f1)"
+	@ls -lh target/$(BINARY_NAME)-aix72.tar.gz 2>/dev/null | awk '{print "Size: " $$5}' || echo "Size: $$(ls -l target/$(BINARY_NAME)-aix72.tar.gz | awk '{print $$5}') bytes"
 	@echo ""
 	@echo "Contents:"
-	@tar -tzf target/$(BINARY_NAME)-aix72.tar.gz | head -20
+	@gunzip -c target/$(BINARY_NAME)-aix72.tar.gz | tar -tf - | head -20
 	@echo ""
 	@echo "To deploy on target AIX system:"
 	@echo "  1. Transfer target/$(BINARY_NAME)-aix72.tar.gz to target system"
