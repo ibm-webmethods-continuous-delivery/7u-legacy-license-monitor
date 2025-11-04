@@ -22,22 +22,14 @@ BUILD_FLAGS=-v $(LDFLAGS)
 
 # Platform-specific configuration (optional)
 # Create build-config.mk for platform-specific settings
-# Example for AIX: ln -s build-config-aix72.mk build-config.mk
--include build-config.mk
+# Example for AIX: cp build-config-aix72.mk build-config.mk
+# Note: Must use 'include' with file present, or comment out for defaults
+# include build-config.mk
 
-# Allow environment variable override or config file override
-# Use standard make syntax for AIX compatibility
-ifndef BUILD_LDFLAGS
+# Default values (override via build-config.mk if needed)
 BUILD_LDFLAGS = $(LDFLAGS)
-endif
-
-ifndef STATIC_BUILD_ENABLED
 STATIC_BUILD_ENABLED = yes
-endif
-
-ifndef PLATFORM
 PLATFORM = linux-amd64
-endif
 
 .PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full platform-info release-for-aix
 
@@ -59,20 +51,8 @@ build-production:
 	@echo "Production build complete: $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64"
 
 # Build static binary for containers (FROM scratch)
+# Note: Not supported on AIX - use 'make build' instead
 build-static:
-ifeq ($(STATIC_BUILD_ENABLED),no)
-	@echo "========================================================================"
-	@echo "ERROR: Static builds not supported on platform: $(PLATFORM)"
-	@echo "========================================================================"
-	@echo ""
-	@echo "Static linking is not available due to platform limitations."
-	@echo "Use 'make build' for a dynamic build instead."
-	@echo ""
-	@echo "The dynamic build has been tested and works correctly on this platform."
-	@echo "It includes all necessary functionality for production use."
-	@echo ""
-	@exit 1
-else
 	@echo "Building static binary for containers..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GOBUILD) -ldflags '-linkmode external -extldflags "-static" -s -w' -o $(BUILD_DIR)/$(BINARY_NAME)-static ./$(CMD_DIR)
@@ -83,7 +63,6 @@ else
 	@echo "  1. Exit devcontainer"
 	@echo "  2. cd prodcontainer"
 	@echo "  3. build.bat"
-endif
 
 # Build static binary and run acceptance tests
 build-static-with-tests: build-static acceptance-test
