@@ -26,9 +26,18 @@ BUILD_FLAGS=-v $(LDFLAGS)
 -include build-config.mk
 
 # Allow environment variable override or config file override
-BUILD_LDFLAGS ?= $(LDFLAGS)
-STATIC_BUILD_ENABLED ?= yes
-PLATFORM ?= linux-amd64
+# Use standard make syntax for AIX compatibility
+ifndef BUILD_LDFLAGS
+BUILD_LDFLAGS = $(LDFLAGS)
+endif
+
+ifndef STATIC_BUILD_ENABLED
+STATIC_BUILD_ENABLED = yes
+endif
+
+ifndef PLATFORM
+PLATFORM = linux-amd64
+endif
 
 .PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full platform-info release-for-aix
 
