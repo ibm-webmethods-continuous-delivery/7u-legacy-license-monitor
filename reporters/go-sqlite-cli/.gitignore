@@ -9,6 +9,9 @@ prodcontainer/test-data/
 *.so
 *.dylib
 
+# Platform-specific build configuration
+build-config.mk
+
 # Test coverage
 coverage.out
 coverage.html

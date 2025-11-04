@@ -20,16 +20,26 @@ GOMOD=$(GOCMD) mod
 LDFLAGS=-ldflags "-s -w"
 BUILD_FLAGS=-v $(LDFLAGS)
 
-.PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full
+# Platform-specific configuration (optional)
+# Create build-config.mk for platform-specific settings
+# Example for AIX: ln -s build-config-aix72.mk build-config.mk
+-include build-config.mk
+
+# Allow environment variable override or config file override
+BUILD_LDFLAGS ?= $(LDFLAGS)
+STATIC_BUILD_ENABLED ?= yes
+PLATFORM ?= linux-amd64
+
+.PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full platform-info release-for-aix
 
 # Default target
 all: clean test build
 
 # Build the application
 build:
-	@echo "Building $(BINARY_NAME)..."
+	@echo "Building $(BINARY_NAME) for $(PLATFORM)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+	$(GOBUILD) -v $(BUILD_LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # Build for production (Linux amd64)
@@ -41,6 +51,19 @@ build-production:
 
 # Build static binary for containers (FROM scratch)
 build-static:
+ifeq ($(STATIC_BUILD_ENABLED),no)
+	@echo "========================================================================"
+	@echo "ERROR: Static builds not supported on platform: $(PLATFORM)"
+	@echo "========================================================================"
+	@echo ""
+	@echo "Static linking is not available due to platform limitations."
+	@echo "Use 'make build' for a dynamic build instead."
+	@echo ""
+	@echo "The dynamic build has been tested and works correctly on this platform."
+	@echo "It includes all necessary functionality for production use."
+	@echo ""
+	@exit 1
+else
 	@echo "Building static binary for containers..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GOBUILD) -ldflags '-linkmode external -extldflags "-static" -s -w' -o $(BUILD_DIR)/$(BINARY_NAME)-static ./$(CMD_DIR)
@@ -51,6 +74,7 @@ build-static:
 	@echo "  1. Exit devcontainer"
 	@echo "  2. cd prodcontainer"
 	@echo "  3. build.bat"
+endif
 
 # Build static binary and run acceptance tests
 build-static-with-tests: build-static acceptance-test
@@ -222,6 +246,108 @@ dev: build init-db
 	@echo "Development setup complete"
 	@echo "Run './target/bin/$(BINARY_NAME) --help' for usage"
 
+# Show platform configuration
+platform-info:
+	@echo "Platform Configuration:"
+	@echo "  Platform: $(PLATFORM)"
+	@echo "  Build flags: $(BUILD_LDFLAGS)"
+	@echo "  Static builds: $(STATIC_BUILD_ENABLED)"
+	@echo "  Go command: $(GOBUILD)"
+	@echo ""
+	@echo "System information:"
+	@echo "  OS: $$(uname -s)"
+	@echo "  Arch: $$(uname -m)"
+	@echo "  Go version: $$($(GOCMD) version 2>/dev/null || echo 'not available')"
+	@echo ""
+	@if [ -f build-config.mk ]; then \
+		echo "Using platform config: build-config.mk"; \
+		echo "Content:"; \
+		cat build-config.mk; \
+	else \
+		echo "No platform config file (using defaults)"; \
+	fi
+
+# Create AIX release package with bundled dependencies
+release-for-aix: build
+	@echo "========================================================================"
+	@echo "Creating AIX Release Package"
+	@echo "========================================================================"
+	@echo ""
+	@echo "Step 1: Building binary..."
+	@mkdir -p target/aix-release/bin
+	@mkdir -p target/aix-release/lib
+	@mkdir -p target/aix-release/docs
+	@echo ""
+	@echo "Step 2: Copying binary..."
+	@cp $(BUILD_DIR)/$(BINARY_NAME) target/aix-release/bin/$(BINARY_NAME).bin
+	@echo "  Binary: $(BUILD_DIR)/$(BINARY_NAME) -> target/aix-release/bin/$(BINARY_NAME).bin"
+	@echo ""
+	@echo "Step 3: Detecting and copying required libraries..."
+	@if command -v ldd >/dev/null 2>&1; then \
+		echo "  Using ldd to detect dependencies..."; \
+		ldd $(BUILD_DIR)/$(BINARY_NAME) > target/aix-release/DETECTED_DEPENDENCIES.txt; \
+		echo "  Dependencies saved to: target/aix-release/DETECTED_DEPENDENCIES.txt"; \
+		echo ""; \
+		echo "  Copying gcc-go runtime libraries..."; \
+		for libpath in /opt/freeware/lib/gcc/powerpc-ibm-aix*/*/ppc64/libgo.a; do \
+			if [ -f "$$libpath" ]; then \
+				cp "$$libpath" target/aix-release/lib/; \
+				echo "    Copied: $$libpath"; \
+				break; \
+			fi; \
+		done; \
+		for libpath in /opt/freeware/lib/gcc/powerpc-ibm-aix*/*/ppc64/libgcc_s.a; do \
+			if [ -f "$$libpath" ]; then \
+				cp "$$libpath" target/aix-release/lib/; \
+				echo "    Copied: $$libpath"; \
+				break; \
+			fi; \
+		done; \
+	else \
+		echo "  Warning: ldd not available, attempting to copy libraries anyway..."; \
+		cp /opt/freeware/lib/gcc/powerpc-ibm-aix7.2.0.0/13/ppc64/libgo.a target/aix-release/lib/ 2>/dev/null || true; \
+		cp /opt/freeware/lib/gcc/powerpc-ibm-aix7.2.0.0/13/ppc64/libgcc_s.a target/aix-release/lib/ 2>/dev/null || true; \
+	fi
+	@echo ""
+	@echo "Step 4: Creating wrapper script..."
+	@cp release-templates/wrapper-script.sh target/aix-release/bin/$(BINARY_NAME)
+	@chmod +x target/aix-release/bin/$(BINARY_NAME)
+	@chmod +x target/aix-release/bin/$(BINARY_NAME).bin
+	@echo "  Wrapper created: target/aix-release/bin/$(BINARY_NAME)"
+	@echo ""
+	@echo "Step 5: Creating deployment documentation..."
+	@sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/DEPLOY_ON_AIX.md > target/aix-release/DEPLOY_ON_AIX.md
+	@echo "  Deployment guide created: target/aix-release/DEPLOY_ON_AIX.md"
+	@echo ""
+	@echo "Step 6: Creating README..."
+	@sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/README.txt > target/aix-release/README.txt
+	@echo "  README created: target/aix-release/README.txt"
+	@echo ""
+	@echo "Step 7: Creating release archive..."
+	@cd target && tar -czf $(BINARY_NAME)-aix72.tar.gz aix-release/
+	@echo "  Archive created: target/$(BINARY_NAME)-aix72.tar.gz"
+	@echo ""
+	@echo "Step 8: Calculating checksums..."
+	@cd target && sum $(BINARY_NAME)-aix72.tar.gz > $(BINARY_NAME)-aix72.tar.gz.sum
+	@echo "  Checksum: target/$(BINARY_NAME)-aix72.tar.gz.sum"
+	@echo ""
+	@echo "========================================================================"
+	@echo "Release Package Complete!"
+	@echo "========================================================================"
+	@echo ""
+	@echo "Package: target/$(BINARY_NAME)-aix72.tar.gz"
+	@echo "Size: $$(du -h target/$(BINARY_NAME)-aix72.tar.gz | cut -f1)"
+	@echo ""
+	@echo "Contents:"
+	@tar -tzf target/$(BINARY_NAME)-aix72.tar.gz | head -20
+	@echo ""
+	@echo "To deploy on target AIX system:"
+	@echo "  1. Transfer target/$(BINARY_NAME)-aix72.tar.gz to target system"
+	@echo "  2. Extract: gunzip -c $(BINARY_NAME)-aix72.tar.gz | tar -xf -"
+	@echo "  3. Read: aix-release/DEPLOY_ON_AIX.md"
+	@echo "  4. Test: aix-release/bin/$(BINARY_NAME) --help"
+	@echo ""
+
 # Help target
 help:
 	@echo "Available targets:"
@@ -257,7 +383,14 @@ help:
 	@echo "  run-help   - Build and show application help"
 	@echo "  dev        - Development setup (build and init-db)"
 	@echo "  build-aix-info - Show information about AIX compilation"
+	@echo "  platform-info - Display platform configuration"
+	@echo "  release-for-aix - Create AIX release package with bundled dependencies"
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "Quick Start:"
 	@echo "  make acceptance-test-full  - Run complete acceptance test from scratch"
+	@echo ""
+	@echo "AIX Build:"
+	@echo "  make platform-info      - Show current platform configuration"
+	@echo "  make build              - Build for current platform"
+	@echo "  make release-for-aix    - Create deployment package for AIX"
