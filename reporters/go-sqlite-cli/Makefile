@@ -20,16 +20,16 @@ GOMOD=$(GOCMD) mod
 LDFLAGS=-ldflags "-s -w"
 BUILD_FLAGS=-v $(LDFLAGS)
 
-# Platform-specific configuration (optional)
-# Create build-config.mk for platform-specific settings
-# Example for AIX: cp build-config-aix72.mk build-config.mk
-# Note: Must use 'include' with file present, or comment out for defaults
-# include build-config.mk
-
-# Default values (override via build-config.mk if needed)
+# Default values (can be overridden via build-config.mk)
 BUILD_LDFLAGS = $(LDFLAGS)
 STATIC_BUILD_ENABLED = yes
 PLATFORM = linux-amd64
+
+# Platform-specific configuration (optional)
+# Create build-config.mk for platform-specific settings
+# Example for AIX: cp build-config-aix72.mk build-config.mk
+# This will override the defaults above
+include build-config.mk
 
 .PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full platform-info release-for-aix
 
@@ -321,7 +321,8 @@ release-for-aix: build
 	@echo "  Test fixtures: $$(ls target/aix-release/acceptance-test/fixtures/*.csv | wc -l | tr -d ' ') files"
 	@echo ""
 	@echo "Step 8: Creating release archive..."
-	@cd target && tar -czf $(BINARY_NAME)-aix72.tar.gz aix-release/
+	@cd target && tar -cf $(BINARY_NAME)-aix72.tar aix-release/
+	@cd target && gzip -f $(BINARY_NAME)-aix72.tar
 	@echo "  Archive created: target/$(BINARY_NAME)-aix72.tar.gz"
 	@echo ""
 	@echo "Step 9: Calculating checksums..."
