@@ -9,10 +9,11 @@
 ```
 bin/iwldr        - Main executable (wrapper script)
 bin/iwldr.bin    - Actual binary
-lib/libgo.a                   - Go runtime library (bundled)
-lib/libgcc_s.a                - GCC support library (bundled)
-DEPLOY_ON_AIX.md              - This file
-DETECTED_DEPENDENCIES.txt     - Full dependency list from build system
+lib/libgo.a               - Go runtime library (bundled)
+lib/libgcc_s.a            - GCC support library (bundled)
+acceptance-test/          - Deployment verification tests
+DEPLOY_ON_AIX.md          - This file
+DETECTED_DEPENDENCIES.txt - Full dependency list from build system
 ```
 
 ## Quick Start
@@ -24,15 +25,25 @@ gunzip -c iwldr-aix72.tar.gz | tar -xf -
 cd iwldr-aix72
 ```
 
-### 2. Test Binary
+### 2. Run Acceptance Test (Recommended)
+
+Before deploying to production, verify the binary works on your system:
+
+```bash
+cd acceptance-test
+./RUN_TEST.sh
+```
+
+If all tests pass, you can proceed with deployment. If tests fail, review the test output and the Troubleshooting section below.
+
+### 3. Test Binary
 
 ```bash
 ./bin/iwldr --help
-```
 
 If this works, you are ready to deploy!
 
-### 3. Install to Production Location
+### 4. Install to Production Location
 
 ```bash
 # Create installation directory
@@ -51,14 +62,14 @@ mkdir -p /opt/license-monitor/discards
 /opt/license-monitor/bin/iwldr --help
 ```
 
-### 4. Initialize Database
+### 5. Initialize Database
 
 ```bash
 /opt/license-monitor/bin/iwldr init \
   --db-path /opt/license-monitor/data/license-monitor.db
 ```
 
-### 5. Import Reference Data (First Time Only)
+### 6. Import Reference Data (First Time Only)
 
 You will need the reference CSV files from the repository:
 - license-terms.csv

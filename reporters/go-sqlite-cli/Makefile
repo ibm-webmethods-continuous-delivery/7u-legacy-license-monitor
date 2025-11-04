@@ -276,7 +276,8 @@ release-for-aix: build
 	@echo "Step 1: Building binary..."
 	@mkdir -p target/aix-release/bin
 	@mkdir -p target/aix-release/lib
-	@mkdir -p target/aix-release/docs
+	@mkdir -p target/aix-release/acceptance-test/fixtures
+	@mkdir -p target/aix-release/acceptance-test/test-data
 	@echo ""
 	@echo "Step 2: Copying binary..."
 	@cp $(BUILD_DIR)/$(BINARY_NAME) target/aix-release/bin/$(BINARY_NAME).bin
@@ -323,11 +324,19 @@ release-for-aix: build
 	@sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/README.txt > target/aix-release/README.txt
 	@echo "  README created: target/aix-release/README.txt"
 	@echo ""
-	@echo "Step 7: Creating release archive..."
+	@echo "Step 7: Copying acceptance test..."
+	@cp release-templates/acceptance-test/RUN_TEST.sh target/aix-release/acceptance-test/
+	@cp release-templates/acceptance-test/README.md target/aix-release/acceptance-test/
+	@cp release-templates/acceptance-test/fixtures/*.csv target/aix-release/acceptance-test/fixtures/
+	@chmod +x target/aix-release/acceptance-test/RUN_TEST.sh
+	@echo "  Acceptance test copied: target/aix-release/acceptance-test/"
+	@echo "  Test fixtures: $$(ls target/aix-release/acceptance-test/fixtures/*.csv | wc -l | tr -d ' ') files"
+	@echo ""
+	@echo "Step 8: Creating release archive..."
 	@cd target && tar -czf $(BINARY_NAME)-aix72.tar.gz aix-release/
 	@echo "  Archive created: target/$(BINARY_NAME)-aix72.tar.gz"
 	@echo ""
-	@echo "Step 8: Calculating checksums..."
+	@echo "Step 9: Calculating checksums..."
 	@cd target && sum $(BINARY_NAME)-aix72.tar.gz > $(BINARY_NAME)-aix72.tar.gz.sum
 	@echo "  Checksum: target/$(BINARY_NAME)-aix72.tar.gz.sum"
 	@echo ""
@@ -344,8 +353,9 @@ release-for-aix: build
 	@echo "To deploy on target AIX system:"
 	@echo "  1. Transfer target/$(BINARY_NAME)-aix72.tar.gz to target system"
 	@echo "  2. Extract: gunzip -c $(BINARY_NAME)-aix72.tar.gz | tar -xf -"
-	@echo "  3. Read: aix-release/DEPLOY_ON_AIX.md"
-	@echo "  4. Test: aix-release/bin/$(BINARY_NAME) --help"
+	@echo "  3. Read: $(BINARY_NAME)-aix72/DEPLOY_ON_AIX.md"
+	@echo "  4. Run acceptance test: cd $(BINARY_NAME)-aix72/acceptance-test && ./RUN_TEST.sh"
+	@echo "  5. If tests pass, proceed with production deployment"
 	@echo ""
 
 # Help target
