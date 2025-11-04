@@ -1,7 +1,7 @@
 # Build variables
-BINARY_NAME=seed-go-sqlite-api
+BINARY_NAME=iwldr
 BUILD_DIR=target/bin
-CMD_DIR=cmd/seed-go-sqlite-api
+CMD_DIR=cmd/iwldr
 DATA_DIR=data
 ACCEPTANCE_TEST_DIR=acceptance-test
 ACCEPTANCE_DB=$(ACCEPTANCE_TEST_DIR)/acceptance-test.db

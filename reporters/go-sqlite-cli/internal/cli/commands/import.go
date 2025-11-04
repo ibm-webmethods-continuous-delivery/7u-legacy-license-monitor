@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/database"
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/importer"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/database"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/importer"
 	"github.com/spf13/cobra"
 )
 

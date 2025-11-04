@@ -8,7 +8,7 @@ import (
 "os"
 
 _ "github.com/mattn/go-sqlite3"
-"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/database"
+"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/database"
 )
 
 func main() {

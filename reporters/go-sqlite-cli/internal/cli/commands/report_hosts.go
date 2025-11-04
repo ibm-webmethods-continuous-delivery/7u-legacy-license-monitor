@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/database"
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/reports"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/database"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/reports"
 )
 
 var reportHostsCmd = &cobra.Command{

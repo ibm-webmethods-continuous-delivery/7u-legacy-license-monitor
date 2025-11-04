@@ -67,13 +67,13 @@ Use our CLI tool to export data:
 cd reporters/go-sqlite-cli/acceptance-test
 
 # Export to CSV
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db \
     --format csv \
     --output /workspaces/7u-legacy-license-monitor/daily-summary.csv
 
 # Export to JSON
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db \
     --format json \
     --output /workspaces/7u-legacy-license-monitor/daily-summary.json
@@ -157,11 +157,11 @@ Instead of opening in SQLiteman, use our built-in reports:
 
 ```bash
 # Beautiful table output
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db
 
 # Export everything to CSV for Excel
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db \
     --format csv \
     --output /workspaces/7u-legacy-license-monitor/report.csv

@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/importer"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/importer"
 )
 
 func TestParseCSVFile(t *testing.T) {

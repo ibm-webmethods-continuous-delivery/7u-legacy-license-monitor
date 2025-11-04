@@ -17,7 +17,7 @@ package main
 import (
 	"log"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/cli"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/cli"
 )
 
 func main() {

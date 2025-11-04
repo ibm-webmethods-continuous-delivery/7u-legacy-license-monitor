@@ -7,7 +7,7 @@ Platform: AIX 7.2 / PowerPC 64-bit
 QUICK START
 -----------
 1. Read DEPLOY_ON_AIX.md for detailed instructions
-2. Test: ./bin/seed-go-sqlite-api --help
+2. Test: ./bin/iwldr --help
 3. Install: Copy bin/ and lib/ to your installation directory
 
 CONTENTS

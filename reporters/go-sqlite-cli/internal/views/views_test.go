@@ -17,7 +17,7 @@ package views_test
 import (
 	"testing"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/views"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/views"
 )
 
 func TestDataView(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/database"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/database"
 )
 
 func TestConnect(t *testing.T) {

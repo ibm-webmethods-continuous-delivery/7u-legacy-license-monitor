@@ -72,7 +72,7 @@ Physical Hosts:|5
 ### View Data with CLI
 ```bash
 cd reporters/go-sqlite-cli/acceptance-test
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db
 ```
 
@@ -163,17 +163,17 @@ After running test with `--preserve`:
 
 ```bash
 # Table format
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db
 
 # CSV export
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db \
     --format csv \
     --output /tmp/report.csv
 
 # Specific product
-../target/bin/seed-go-sqlite-api-static report daily-summary \
+../target/bin/iwldr-static report daily-summary \
     --db-path test-data/test-workflow.db \
     --product BRK_ONP_PRD
 ```

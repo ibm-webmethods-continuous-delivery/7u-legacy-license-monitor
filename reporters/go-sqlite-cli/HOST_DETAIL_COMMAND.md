@@ -10,7 +10,7 @@ The command queries the `v_host_detail` view which is created during database in
 
 ### Basic Syntax
 ```bash
-./seed-go-sqlite-api-static report host-detail --db-path <path-to-db> [flags]
+./iwldr-static report host-detail --db-path <path-to-db> [flags]
 ```
 
 ### Available Flags
@@ -43,7 +43,7 @@ The report includes the following columns:
 
 ### 1. Display all host details (table format)
 ```bash
-./seed-go-sqlite-api-static report host-detail --db-path test-data/test-workflow.db
+./iwldr-static report host-detail --db-path test-data/test-workflow.db
 ```
 
 Output:
@@ -63,12 +63,12 @@ Total rows: 161
 
 ### 2. Filter by specific host
 ```bash
-./seed-go-sqlite-api-static report host-detail --db-path test-data/test-workflow.db --host i9.local
+./iwldr-static report host-detail --db-path test-data/test-workflow.db --host i9.local
 ```
 
 ### 3. Filter by host and product
 ```bash
-./seed-go-sqlite-api-static report host-detail \
+./iwldr-static report host-detail \
   --db-path test-data/test-workflow.db \
   --host i9.local \
   --product IS_ONP_PRD
@@ -90,7 +90,7 @@ Total rows: 20
 
 ### 4. Export to CSV
 ```bash
-./seed-go-sqlite-api-static report host-detail \
+./iwldr-static report host-detail \
   --db-path test-data/test-workflow.db \
   --host o6.local \
   --format csv \
@@ -112,7 +112,7 @@ o6.local,2025-10-21,false,IS_ONP_PRD,false,true,16,o6,,Solaris 8,true,false
 
 ### 5. Export to JSON with date range
 ```bash
-./seed-go-sqlite-api-static report host-detail \
+./iwldr-static report host-detail \
   --db-path test-data/test-workflow.db \
   --host i8.local \
   --product BRK_ONP_PRD \

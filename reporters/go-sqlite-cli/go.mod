@@ -1,4 +1,4 @@
-module github.com/miun-personal-shadows/seed-go-sqlite-api
+module github.com/ibm-webmethods-aftermarket-tools/iwldr
 
 go 1.24
 

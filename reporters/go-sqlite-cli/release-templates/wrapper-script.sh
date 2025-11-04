@@ -1,5 +1,5 @@
 #!/bin/sh
-# Wrapper script for seed-go-sqlite-api with bundled libraries
+# Wrapper script for iwldr with bundled libraries
 # This ensures the bundled gcc-go runtime libraries are found
 
 # Get the directory where this script is located
@@ -11,4 +11,4 @@ LIBPATH="$RELEASE_ROOT/lib:$LIBPATH"
 export LIBPATH
 
 # Execute the actual binary with all arguments passed through
-exec "$SCRIPT_DIR/seed-go-sqlite-api.bin" "$@"
+exec "$SCRIPT_DIR/iwldr.bin" "$@"

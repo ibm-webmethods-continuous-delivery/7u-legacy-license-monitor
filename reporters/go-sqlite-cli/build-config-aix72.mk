@@ -29,4 +29,5 @@ STATIC_BUILD_ENABLED=no
 PLATFORM=aix-7.2-ppc64
 
 # Optional: Override binary name for platform-specific builds
-# BINARY_NAME=seed-go-sqlite-api-aix72
+# For alternative binary naming:
+# BINARY_NAME=iwldr-aix72

@@ -10,7 +10,7 @@ FIXTURES_DIR="${TEST_DIR}/fixtures"
 TEST_DATA_DIR="${TEST_DIR}/test-data"
 
 # Binary location
-BINARY="${TEST_DIR}/../target/bin/seed-go-sqlite-api-static"
+BINARY="${TEST_DIR}/../target/bin/iwldr-static"
 
 # Test folders
 INPUT_DIR="${TEST_DATA_DIR}/input"

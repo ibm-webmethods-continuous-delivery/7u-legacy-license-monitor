@@ -11,7 +11,7 @@ TEST_DATA_DIR="${TEST_DIR}/test-data"
 EXPECTED_OUTPUT_DIR="${TEST_DIR}/expected-output"
 
 # Binary location - assumes build has already been run
-BINARY="${TEST_DIR}/../target/bin/seed-go-sqlite-api-static"
+BINARY="${TEST_DIR}/../target/bin/iwldr-static"
 
 # Test database paths
 TEST_DB="${TEST_DATA_DIR}/test-acceptance.db"

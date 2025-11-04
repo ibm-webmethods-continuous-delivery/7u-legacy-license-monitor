@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/database"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/database"
 	"github.com/spf13/cobra"
 )
 

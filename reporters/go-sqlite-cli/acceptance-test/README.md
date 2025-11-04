@@ -118,7 +118,7 @@ Tests produce output in this format:
 Acceptance Test Suite for go-sqlite-cli
 ==========================================
 Test directory: /path/to/acceptance-test
-Binary: /path/to/target/bin/seed-go-sqlite-api-static
+Binary: /path/to/target/bin/iwldr-static
 ==========================================
 
 Testing database initialization...
@@ -251,7 +251,7 @@ The test suite uses shunit2 assertion functions:
 ## Known Limitations
 
 1. **Report Testing**: Some report generation tests may produce warnings if report commands are still in development
-2. **Binary Location**: Tests assume static binary is at `../target/bin/seed-go-sqlite-api-static`
+2. **Binary Location**: Tests assume static binary is at `../target/bin/iwldr-static`
 3. **Environment**: Tests are designed for Alpine Linux environment (licmon-dev01 devcontainer)
 
 ## Integration with Build Process
@@ -275,7 +275,7 @@ These tests are designed to run:
 
 ### Binary Not Found
 
-**Error**: `Binary not found at .../seed-go-sqlite-api-static`
+**Error**: `Binary not found at .../iwldr-static`
 
 **Solution**: Build the static binary first:
 ```bash

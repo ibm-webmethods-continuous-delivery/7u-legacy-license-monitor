@@ -15,7 +15,7 @@
 package cli
 
 import (
-	"github.com/miun-personal-shadows/seed-go-sqlite-api/internal/cli/commands"
+	"github.com/ibm-webmethods-aftermarket-tools/iwldr/internal/cli/commands"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "go-sqlite-cli",
+	Use:   "iwldr",
 	Short: "License monitor database management tool",
 	Long: `A CLI tool for managing webMethods license monitoring database.
 Supports database initialization, CSV import, and compliance reporting.
