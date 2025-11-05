@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"text/tabwriter"
 )
 
@@ -103,7 +102,7 @@ func (r *PhysicalHostReport) WriteTable(w io.Writer, rows []PhysicalHostRow) err
 	
 	// Header
 	fmt.Fprintln(tw, "DATE\tPHYS_HOST_ID\tMETHOD\tCONFIDENCE\tPHYS_CORES\tVM_COUNT\tVM_CORES")
-	fmt.Fprintln(tw, strings.Repeat("-", 100))
+	fmt.Fprintln(tw, "----\t------------\t------\t----------\t----------\t--------\t--------")
 	
 	// Data rows
 	totalPhysCores := 0
@@ -126,7 +125,7 @@ func (r *PhysicalHostReport) WriteTable(w io.Writer, rows []PhysicalHostRow) err
 	
 	// Summary
 	if len(rows) > 0 {
-		fmt.Fprintln(tw, strings.Repeat("-", 100))
+		fmt.Fprintln(tw, "----\t------------\t------\t----------\t----------\t--------\t--------")
 		fmt.Fprintf(tw, "TOTAL (%d hosts)\t\t\t\t%d\t%d\t%d\n", len(rows), totalPhysCores, totalVMs, totalVMCores)
 	}
 	

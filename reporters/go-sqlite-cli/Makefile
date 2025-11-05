@@ -190,15 +190,12 @@ acceptance-test-verify:
 	@./$(BUILD_DIR)/$(BINARY_NAME) report cores --db-path $(ACCEPTANCE_DB) --format table | head -7
 	@echo ""
 	@echo "3. Daily Summary Report (first 5 rows):"
-	@./$(BUILD_DIR)/$(BINARY_NAME) report daily --db-path $(ACCEPTANCE_DB) --format table | head -7
-	@echo ""
-	@echo "4. Daily Summary by Product (first 5 rows):"
 	@./$(BUILD_DIR)/$(BINARY_NAME) report daily-summary --db-path $(ACCEPTANCE_DB) --format table | head -7
 	@echo ""
-	@echo "5. Host Detail Report (first 5 rows):"
+	@echo "4. Host Detail Report (first 5 rows):"
 	@./$(BUILD_DIR)/$(BINARY_NAME) report host-detail --db-path $(ACCEPTANCE_DB) --format table | head -7
 	@echo ""
-	@echo "6. Hosts Report (first 5 rows):"
+	@echo "5. Hosts Report (first 5 rows):"
 	@./$(BUILD_DIR)/$(BINARY_NAME) report hosts --db-path $(ACCEPTANCE_DB) --format table | head -7
 	@echo ""
 	@echo "========================================="

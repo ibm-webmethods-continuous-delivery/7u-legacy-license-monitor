@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -158,7 +157,7 @@ func (r *CoreAggregationReport) WriteTable(w io.Writer, rows []CoreAggregationRo
 	
 	// Header
 	fmt.Fprintln(tw, "DATE\tPRODUCT\tHOSTNAME\tVM_CORES\tLIC_CORES\tELIG\tINELIG\tPHYS_ID\tSTATUS")
-	fmt.Fprintln(tw, strings.Repeat("-", 120))
+	fmt.Fprintln(tw, "----\t-------\t--------\t--------\t---------\t----\t------\t-------\t------")
 	
 	// Data rows
 	for _, row := range rows {
@@ -194,7 +193,7 @@ func (r *CoreAggregationReport) WriteTable(w io.Writer, rows []CoreAggregationRo
 			totalInelig += row.IneligibleCores
 		}
 		
-		fmt.Fprintln(tw, strings.Repeat("-", 120))
+		fmt.Fprintln(tw, "----\t-------\t--------\t--------\t---------\t----\t------\t-------\t------")
 		fmt.Fprintf(tw, "TOTAL\t\t\t%d\t%d\t%d\t%d\t\t\n", totalVM, totalLic, totalElig, totalInelig)
 	}
 	
