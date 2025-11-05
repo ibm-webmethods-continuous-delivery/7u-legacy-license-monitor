@@ -45,11 +45,14 @@ Debug mode creates additional trace files including full process listings and co
 # Set inspector home directory
 export IWDLI_HOME=~/iwdli
 
-# Set custom detection configuration directory (contract-level, fixed per deployment)
-export IWDLI_DETECTION_CONFIG_DIR=/opt/inspector-detection-config
+# Set IBM terms configuration directory
+export IWDLI_IBM_TERMS_DIR=/opt/inspector-config/ibm-terms
 
-# Set custom landscape configuration directory (per environment)
-export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/inspector-landscape-config
+# Set contract products configuration directory
+export IWDLI_CONTRACT_PRODUCTS_DIR=/opt/inspector-config/contract-products
+
+# Set landscape configuration directory (REQUIRED - must point to specific subdomain)
+export IWDLI_LANDSCAPE_CONFIG_DIR=/opt/inspector-config/landscapes/EAI/NON-PROD/PREPROD
 
 # Set custom data output directory
 export IWDLI_DATA_DIR=/var/data/inspector-output
@@ -71,22 +74,26 @@ The inspector supports the following environment variables for flexible deployme
 | `IWDLI_HOME` | `/tmp/iwdli-home` | Inspector home directory (used as base for default paths) |
 | `IWDLI_AUDIT_DIR` | `$IWDLI_HOME/audit` | Directory for audit logs and session logs |
 | `IWDLI_DATA_DIR` | `$IWDLI_HOME/data` | Directory for CSV output files |
-| `IWDLI_DETECTION_CONFIG_DIR` | `$IWDLI_HOME/detection-config` | Contract-level configuration (eligibility CSVs, product codes) |
-| `IWDLI_LANDSCAPE_CONFIG_DIR` | `$IWDLI_HOME/landscape-config` | Environment-specific configuration (hostname configs) |
+| `IWDLI_IBM_TERMS_DIR` | `$IWDLI_HOME/ibm-terms` | IBM eligibility criteria (processors, OS, virtualization) |
+| `IWDLI_CONTRACT_PRODUCTS_DIR` | `$IWDLI_HOME/contract-products` | Contract product codes and detection patterns |
+| `IWDLI_LANDSCAPE_CONFIG_DIR` | **(REQUIRED)** | Landscape subdomain configuration (no default) |
 
 **Variable Naming Convention:**
 - All inspector environment variables use the `IWDLI_` prefix
 - IWDLI stands for "IBM webMethods Default License Inspector"
 - This prevents interference with other applications' environment variables
 
-**Configuration Directory Separation:**
-- **Detection Config** (`IWDLI_DETECTION_CONFIG_DIR`): Contract-level configuration that rarely changes
-  - IBM eligibility reference files (processors, OS, virtualization)
-  - Product code mappings
-  - Detection patterns
-- **Landscape Config** (`IWDLI_LANDSCAPE_CONFIG_DIR`): Environment-specific configuration
-  - Hostname-specific node configurations
-  - Varies per deployment landscape
+**Configuration 3-Tier Architecture:**
+- **Tier 1 - IBM Terms** (`IWDLI_IBM_TERMS_DIR`): Global IBM reference data
+  - IBM eligible processors, OS, virtualization CSV files
+  - Updated when IBM publishes new eligibility criteria
+- **Tier 2 - Contract Products** (`IWDLI_CONTRACT_PRODUCTS_DIR`): Contract-specific product definitions
+  - Product code mappings and detection patterns
+  - Updated when contract products change
+- **Tier 3 - Landscape Config** (`IWDLI_LANDSCAPE_CONFIG_DIR`): Subdomain-specific configuration
+  - Must point to specific subdomain (e.g., `/landscapes/EAI/NON-PROD/PREPROD`)
+  - Contains node-config.conf per host and product-detection-config.csv per subdomain
+  - REQUIRED - no default value
 
 **Benefits of Environment Variables:**
 - **Code/Config/Data Separation**: Upgrade inspector code without touching configuration or historical data

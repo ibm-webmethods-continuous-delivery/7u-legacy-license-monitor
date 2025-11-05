@@ -26,8 +26,14 @@ export IWDLI_DEBUG="${IWDLI_DEBUG:-OFF}"
 export IWDLI_HOME="${IWDLI_HOME:-/tmp/iwdli-home}"
 export IWDLI_AUDIT_DIR="${IWDLI_AUDIT_DIR:-${IWDLI_HOME}/audit}"
 export IWDLI_DATA_DIR="${IWDLI_DATA_DIR:-${IWDLI_HOME}/data}"
-export IWDLI_DETECTION_CONFIG_DIR="${IWDLI_DETECTION_CONFIG_DIR:-${IWDLI_HOME}/detection-config}"
-export IWDLI_LANDSCAPE_CONFIG_DIR="${IWDLI_LANDSCAPE_CONFIG_DIR:-${IWDLI_HOME}/landscape-config}"
+
+# Configuration directories (3-tier structure) - ALL REQUIRED, no defaults
+export IWDLI_IBM_TERMS_DIR="${IWDLI_IBM_TERMS_DIR:-}"
+export IWDLI_CONTRACT_PRODUCTS_DIR="${IWDLI_CONTRACT_PRODUCTS_DIR:-}"
+export IWDLI_LANDSCAPE_CONFIG_DIR="${IWDLI_LANDSCAPE_CONFIG_DIR:-}"
+
+# Deprecated (for backward compatibility warnings)
+export IWDLI_DETECTION_CONFIG_DIR="${IWDLI_DETECTION_CONFIG_DIR:-}"
 
 ## Session global private constants
 iwdli_session_timestamp=$(date -u '+%Y-%m-%d_%H%M%S')
@@ -138,7 +144,8 @@ log_session_info() {
   logD "  IWDLI_HOME=${IWDLI_HOME}"
   logD "  IWDLI_AUDIT_DIR=${IWDLI_AUDIT_DIR}"
   logD "  IWDLI_DATA_DIR=${IWDLI_DATA_DIR}"
-  logD "  IWDLI_DETECTION_CONFIG_DIR=${IWDLI_DETECTION_CONFIG_DIR}"
+  logD "  IWDLI_IBM_TERMS_DIR=${IWDLI_IBM_TERMS_DIR}"
+  logD "  IWDLI_CONTRACT_PRODUCTS_DIR=${IWDLI_CONTRACT_PRODUCTS_DIR}"
   logD "  IWDLI_LANDSCAPE_CONFIG_DIR=${IWDLI_LANDSCAPE_CONFIG_DIR}"
   logD "Session constants:"
   logD "  iwdli_session_timestamp=${iwdli_session_timestamp}"
@@ -1214,15 +1221,17 @@ detect_processor() {
 # Function to check processor eligibility
 check_processor_eligibility() {
     PROCESSOR_ELIGIBLE="false"
-    # Load processors CSV from detection-config (contract-level configuration)
-    processors_csv="$IWDLI_DETECTION_CONFIG_DIR/ibm-eligible-processors.csv"
+    # Load processors CSV from IBM terms directory
+    processors_csv="$IWDLI_IBM_TERMS_DIR/ibm-eligible-processors.csv"
     
     logD "Checking processor eligibility using: ${processors_csv}"
     
     if [ ! -f "$processors_csv" ]; then
-        log "ERROR: Required processor eligibility file not found: ${processors_csv}"
-        log "ERROR: This file must exist in detection-config directory"
-        exit 1
+      log "ERROR: Required processor eligibility file not found: ${processors_csv}"
+      log "ERROR: This file must exist in IBM terms directory"
+      PROCESSOR_ELIGIBLE="error"
+      write_csv "PROCESSOR_ELIGIBLE" "$PROCESSOR_ELIGIBLE"
+      return 1
     fi
     
     if [ "$PROCESSOR_VENDOR" = "Unknown" ] || [ "$PROCESSOR_BRAND" = "Unknown" ]; then
@@ -1256,15 +1265,19 @@ check_processor_eligibility() {
 check_os_virt_eligibility() {
     OS_ELIGIBLE="false"
     VIRT_ELIGIBLE="false"
-    # Load virt/OS CSV from landscape-config (required)
-    virt_os_csv="$IWDLI_DETECTION_CONFIG_DIR/ibm-eligible-virt-and-os.csv"
+    # Load virt/OS CSV from IBM terms directory
+    virt_os_csv="$IWDLI_IBM_TERMS_DIR/ibm-eligible-virt-and-os.csv"
     
     logD "Checking OS and virtualization eligibility using: ${virt_os_csv}"
     
     if [ ! -f "$virt_os_csv" ]; then
-        log "ERROR: Required OS/Virtualization eligibility file not found: ${virt_os_csv}"
-        log "ERROR: This file must exist in detection-config directory"
-        exit 1
+      log "ERROR: Required OS/Virtualization eligibility file not found: ${virt_os_csv}"
+      log "ERROR: This file must exist in IBM terms directory"
+      OS_ELIGIBLE="error"
+      VIRT_ELIGIBLE="error"
+      write_csv "OS_ELIGIBLE" "$OS_ELIGIBLE"
+      write_csv "VIRT_ELIGIBLE" "$VIRT_ELIGIBLE"
+      return 1
     fi
     
     # Normalize OS name for comparison
@@ -1584,10 +1597,12 @@ show_usage() {
     echo "                                    (default: \$IWDLI_HOME/audit)"
     echo "  IWDLI_DATA_DIR=path               Set CSV data output directory"
     echo "                                    (default: \$IWDLI_HOME/data)"
-    echo "  IWDLI_DETECTION_CONFIG_DIR=path   Set detection configuration directory"
-    echo "                                    (default: \$IWDLI_HOME/detection-config)"
+    echo "  IWDLI_IBM_TERMS_DIR=path          Set IBM terms configuration directory"
+    echo "                                    (default: \$IWDLI_HOME/ibm-terms)"
+    echo "  IWDLI_CONTRACT_PRODUCTS_DIR=path  Set contract products directory"
+    echo "                                    (default: \$IWDLI_HOME/contract-products)"
     echo "  IWDLI_LANDSCAPE_CONFIG_DIR=path   Set landscape configuration directory"
-    echo "                                    (default: \$IWDLI_HOME/landscape-config)"
+    echo "                                    (REQUIRED - no default)"
     echo ""
     echo "Supported platforms:"
     echo "  - AIX (PowerVM detection)"
@@ -1596,14 +1611,146 @@ show_usage() {
     echo "  - Basic IBM i and Windows detection"
     echo ""
     echo "Configuration files:"
-    echo "  Detection config (IWDLI_DETECTION_CONFIG_DIR - contract-level, fixed):"
+    echo "  IBM terms data (IWDLI_IBM_TERMS_DIR - IBM official data):"
     echo "    - ibm-eligible-processors.csv"
     echo "    - ibm-eligible-virt-and-os.csv"
+    echo "  Contract products (IWDLI_CONTRACT_PRODUCTS_DIR - contract-specific):"
     echo "    - product-codes.csv"
-    echo "    - product-detection-config.csv"
-    echo "  Landscape config (IWDLI_LANDSCAPE_CONFIG_DIR - per environment):"
+    echo "  Landscape config (IWDLI_LANDSCAPE_CONFIG_DIR - per subdomain/environment):"
+    echo "    - product-detection-config.csv (subdomain-specific product patterns)"
     echo "    - <hostname>/node-config.conf (host-specific settings)"
-    echo "    - Fallback: node-config.conf in script directory"
+}
+
+# Function to write error CSV (does NOT exit - caller decides)
+write_error_csv() {
+  local error_message="$1"
+  local output_file="$2"
+  
+  logE "VALIDATION ERROR: $error_message"
+  echo "ERROR: $error_message" >&2
+  
+  # Create minimal error CSV
+  {
+    echo "Parameter,Value"
+    echo "DETECTION_TIMESTAMP,$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "SESSION_AUDIT_DIRECTORY,${iwdli_session_audit_dir}"
+    echo "LANDSCAPE_CONFIG_DIR,${IWDLI_LANDSCAPE_CONFIG_DIR:-NOT_SET}"
+    echo "HOSTNAME,${hostname_short}"
+    echo "DETECTION_RESULT,ERROR"
+    echo "ERROR_MESSAGE,${error_message}"
+  } > "$output_file"
+  
+  logI "Error CSV written to: $output_file"
+}
+
+# Function to validate configuration before running detection
+validate_configuration() {
+  logI "Validating configuration..."
+
+  local validation_errors=""
+  local error_count=0
+    
+  # Check if required environment variables are set
+  if [ -z "$IWDLI_IBM_TERMS_DIR" ]; then
+    error_count=$((error_count+1))
+    logE "ERROR ${error_count}: IWDLI_IBM_TERMS_DIR environment variable is not set (mandatory)"
+    validation_errors="${validation_errors}${error_count}. IWDLI_IBM_TERMS_DIR environment variable is not set (mandatory)\n"
+  fi
+  
+  if [ -z "$IWDLI_CONTRACT_PRODUCTS_DIR" ]; then
+    error_count=$((error_count+1))
+    logE "ERROR ${error_count}: IWDLI_CONTRACT_PRODUCTS_DIR environment variable is not set (mandatory)"
+    validation_errors="${validation_errors}${error_count}. IWDLI_CONTRACT_PRODUCTS_DIR environment variable is not set (mandatory)\n"
+  fi
+  
+  if [ -z "$IWDLI_LANDSCAPE_CONFIG_DIR" ]; then
+    error_count=$((error_count+1))
+    logE "ERROR ${error_count}: IWDLI_LANDSCAPE_CONFIG_DIR environment variable is not set (mandatory)"
+    validation_errors="${validation_errors}${error_count}. IWDLI_LANDSCAPE_CONFIG_DIR environment variable is not set (mandatory)\n"
+  fi
+  
+  # Only check directory existence if variables are set
+  if [ -n "$IWDLI_LANDSCAPE_CONFIG_DIR" ]; then
+    logD "LANDSCAPE_CONFIG_DIR: $IWDLI_LANDSCAPE_CONFIG_DIR"
+    
+    # Check if LANDSCAPE_CONFIG_DIR exists and is accessible
+    if [ ! -d "$IWDLI_LANDSCAPE_CONFIG_DIR" ]; then
+      error_count=$((error_count+1))
+      logE "ERROR ${error_count}: Landscape configuration directory not accessible: ${IWDLI_LANDSCAPE_CONFIG_DIR}"
+      validation_errors="${validation_errors}${error_count}. Landscape configuration directory not accessible: ${IWDLI_LANDSCAPE_CONFIG_DIR}\n"
+    fi
+    
+    # Check for product-detection-config.csv in landscape config (subdomain-specific)
+    if [ ! -f "$IWDLI_LANDSCAPE_CONFIG_DIR/product-detection-config.csv" ]; then
+      error_count=$((error_count+1))
+      logE "ERROR ${error_count}: Missing required file: ${IWDLI_LANDSCAPE_CONFIG_DIR}/product-detection-config.csv"
+      validation_errors="${validation_errors}${error_count}. Missing required file: ${IWDLI_LANDSCAPE_CONFIG_DIR}/product-detection-config.csv\n"
+    fi
+    
+    # Check if host-specific directory exists
+    if [ ! -d "$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short" ]; then
+      error_count=$((error_count+1))
+      logE "ERROR ${error_count}: Host configuration directory not found: ${IWDLI_LANDSCAPE_CONFIG_DIR}/${hostname_short}"
+      validation_errors="${validation_errors}${error_count}. Host configuration directory not found: ${IWDLI_LANDSCAPE_CONFIG_DIR}/${hostname_short}\n"
+    fi
+    
+    # Check if node-config.conf exists for this host
+    if [ ! -f "$IWDLI_LANDSCAPE_CONFIG_DIR/$hostname_short/node-config.conf" ]; then
+      error_count=$((error_count+1))
+      logE "ERROR ${error_count}: Missing required file: ${IWDLI_LANDSCAPE_CONFIG_DIR}/${hostname_short}/node-config.conf"
+      validation_errors="${validation_errors}${error_count}. Missing required file: ${IWDLI_LANDSCAPE_CONFIG_DIR}/${hostname_short}/node-config.conf\n"
+    fi
+  fi
+  
+  # Check IBM terms directory (only if variable is set)
+  if [ -n "$IWDLI_IBM_TERMS_DIR" ]; then
+    if [ ! -d "$IWDLI_IBM_TERMS_DIR" ]; then
+      error_count=$((error_count+1))
+      logE "ERROR ${error_count}: IBM terms directory not accessible: ${IWDLI_IBM_TERMS_DIR}"
+      validation_errors="${validation_errors}${error_count}. IBM terms directory not accessible: ${IWDLI_IBM_TERMS_DIR}\n"
+    else
+      # Check for required IBM terms files
+      if [ ! -f "$IWDLI_IBM_TERMS_DIR/ibm-eligible-processors.csv" ]; then
+        error_count=$((error_count+1))
+        logE "ERROR ${error_count}: Missing required file: ${IWDLI_IBM_TERMS_DIR}/ibm-eligible-processors.csv"
+        validation_errors="${validation_errors}${error_count}. Missing required file: ${IWDLI_IBM_TERMS_DIR}/ibm-eligible-processors.csv\n"
+      fi
+      
+      if [ ! -f "$IWDLI_IBM_TERMS_DIR/ibm-eligible-virt-and-os.csv" ]; then
+        error_count=$((error_count+1))
+        logE "ERROR ${error_count}: Missing required file: ${IWDLI_IBM_TERMS_DIR}/ibm-eligible-virt-and-os.csv"
+        validation_errors="${validation_errors}${error_count}. Missing required file: ${IWDLI_IBM_TERMS_DIR}/ibm-eligible-virt-and-os.csv\n"
+      fi
+    fi
+  fi
+    
+  # Check contract products directory (only if variable is set)
+  if [ -n "$IWDLI_CONTRACT_PRODUCTS_DIR" ]; then
+    if [ ! -d "$IWDLI_CONTRACT_PRODUCTS_DIR" ]; then
+      error_count=$((error_count+1))
+      logE "ERROR ${error_count}: Contract products directory not accessible: ${IWDLI_CONTRACT_PRODUCTS_DIR}"
+      validation_errors="${validation_errors}${error_count}. Contract products directory not accessible: ${IWDLI_CONTRACT_PRODUCTS_DIR}\n"
+    else
+      # Check for product-codes.csv
+      if [ ! -f "$IWDLI_CONTRACT_PRODUCTS_DIR/product-codes.csv" ]; then
+        error_count=$((error_count+1))
+        logE "ERROR ${error_count}: Missing required file: ${IWDLI_CONTRACT_PRODUCTS_DIR}/product-codes.csv"
+        validation_errors="${validation_errors}${error_count}. Missing required file: ${IWDLI_CONTRACT_PRODUCTS_DIR}/product-codes.csv\n"
+      fi
+    fi
+  fi
+    
+  # If there were errors, write error CSV and exit
+  if [ $error_count -gt 0 ]; then
+    logE "Configuration validation FAILED with ${error_count} error(s)"
+    echo "=== Configuration Validation Errors ===" >&2
+    echo -e "$validation_errors" >&2
+    write_error_csv "Configuration validation failed with ${error_count} error(s). See logs for details" "$iwdli_output_file"
+    return 1
+  fi
+    
+  logI "Configuration validation successful"
+  return 0
 }
 
 # Function to load node configuration based on hostname
@@ -1679,7 +1826,7 @@ load_node_config() {
 # Returns: IBM product code or "UNKNOWN" if not found
 get_product_code() {
     local product_mnemo="$1"
-    local product_codes_file="$IWDLI_DETECTION_CONFIG_DIR/product-codes.csv"
+    local product_codes_file="$IWDLI_CONTRACT_PRODUCTS_DIR/product-codes.csv"
     
     if [ ! -f "$product_codes_file" ]; then
         log "WARNING: product-codes.csv not found at: $product_codes_file"
@@ -1888,15 +2035,15 @@ detect_product_installations() {
 
 # Function to detect running webMethods products
 detect_products() { 
-    # Load product detection config from detection-config (contract-level configuration)
-    product_config_file="$IWDLI_DETECTION_CONFIG_DIR/product-detection-config.csv"
+    # Load product detection config from landscape directory (subdomain-specific)
+    product_config_file="$IWDLI_LANDSCAPE_CONFIG_DIR/product-detection-config.csv"
     
     logD "Starting product detection using: ${product_config_file}"
     
     if [ ! -f "$product_config_file" ]; then
-        log "ERROR: Required product detection config file not found: $product_config_file"
-        log "ERROR: This file must exist in detection-config directory"
-        exit 1
+      log "ERROR: Required product detection config file not found: $product_config_file"
+      log "ERROR: This file must exist in landscape configuration directory"
+      return 1
     fi
     
     # Note: load_node_config() is now called in main() before detect_products()
@@ -2046,7 +2193,19 @@ detect_products() {
             if [ "$process_running" = "true" ]; then
                 write_csv "${product_id}_RUNNING_STATUS" "running"
                 write_csv "${product_id}_RUNNING_COUNT" "$__running_process_count"
-                write_csv "${product_id}_RUNNING_COMMANDLINES" "$process_cmdlines"
+                
+                # Write commandlines in indexed format (_01, _02, etc.)
+                if [ -n "$process_cmdlines" ]; then
+                  local index=1
+                  local old_ifs="$IFS"
+                  IFS=';'
+                  for cmdline in $process_cmdlines; do
+                    cmdline_index=$(printf "%02d" $index)
+                    write_csv "${product_id}_RUNNING_COMMANDLINES_${cmdline_index}" "$cmdline"
+                    index=$((index + 1))
+                  done
+                  IFS="$old_ifs"
+                fi
                 
                 # If debug mode is on, capture the specific grep results for this product
                 if [ "$IWDLI_DEBUG" = "ON" ]; then
@@ -2064,18 +2223,23 @@ detect_products() {
             else
                 write_csv "${product_id}_RUNNING_STATUS" "not-running"
                 write_csv "${product_id}_RUNNING_COUNT" "0"
-                write_csv "${product_id}_RUNNING_COMMANDLINES" ""
             fi
             
             # Write installation status keys
             write_csv "${product_id}_INSTALL_STATUS" "$DETECT_INSTALL_STATUS"
             write_csv "${product_id}_INSTALL_COUNT" "$DETECT_INSTALL_COUNT"
             
-            # Handle paths - escape or sanitize if needed
+            # Write paths in indexed format (_01, _02, etc.)
             if [ -n "$DETECT_INSTALL_PATHS" ]; then
-                write_csv "${product_id}_INSTALL_PATHS" "$DETECT_INSTALL_PATHS"
-            else
-                write_csv "${product_id}_INSTALL_PATHS" ""
+              local index=1
+              local old_ifs="$IFS"
+              IFS=';'
+              for install_path in $DETECT_INSTALL_PATHS; do
+                path_index=$(printf "%02d" $index)
+                write_csv "${product_id}_INSTALL_PATH_${path_index}" "$install_path"
+                index=$((index + 1))
+              done
+              IFS="$old_ifs"
             fi
         fi
         # Note: No CSV keys written for absent products (neither running nor installed)
@@ -2119,12 +2283,21 @@ main() {
   echo "Session Audit Directory: $iwdli_session_audit_dir" >> "$iwdli_session_log"
   echo "Script Directory: $script_dir" >> "$iwdli_session_log"
   echo "Data Directory: ${IWDLI_DATA_DIR}" >> "$iwdli_session_log"
-  echo "Detection Config Directory: ${IWDLI_DETECTION_CONFIG_DIR}" >> "$iwdli_session_log"
+  echo "IBM Terms Directory: ${IWDLI_IBM_TERMS_DIR}" >> "$iwdli_session_log"
+  echo "Contract Products Directory: ${IWDLI_CONTRACT_PRODUCTS_DIR}" >> "$iwdli_session_log"
   echo "Landscape Config Directory: ${IWDLI_LANDSCAPE_CONFIG_DIR}" >> "$iwdli_session_log"
   echo "Debug Mode: ${IWDLI_DEBUG:-OFF}" >> "$iwdli_session_log"
   echo "IWDLI Home (env): ${IWDLI_HOME:-<not set>}" >> "$iwdli_session_log"
   echo "=========================================" >> "$iwdli_session_log"
   echo "" >> "$iwdli_session_log"
+  
+  # Validate configuration before proceeding
+  log "Validating configuration..."
+  validate_configuration || {
+    log "ERROR: Configuration validation failed - see error CSV for details"
+    exit 3
+  }
+  log "Configuration validation passed"
     
   log "Starting system detection"
   log "Session audit directory: ${iwdli_session_audit_dir}"
@@ -2133,17 +2306,24 @@ main() {
     
   # Create CSV file with header
   echo "Parameter,Value" > "$iwdli_output_file"
-  write_csv "detection_timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  write_csv "session_audit_directory" "$iwdli_session_audit_dir"
+  write_csv "DETECTION_TIMESTAMP" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  write_csv "SESSION_AUDIT_DIRECTORY" "$iwdli_session_audit_dir"
+  write_csv "LANDSCAPE_CONFIG_DIR" "$IWDLI_LANDSCAPE_CONFIG_DIR"
+  write_csv "HOSTNAME" "$hostname_short"
   
   # Load node configuration early to populate NODE_TYPE, ENVIRONMENT, INSPECTION_LEVEL, NODE_FQDN
   load_node_config
   
+  # Normalize configuration values to uppercase
+  NODE_TYPE=$(echo "$NODE_TYPE" | tr '[:lower:]' '[:upper:]')
+  ENVIRONMENT=$(echo "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]')
+  INSPECTION_LEVEL=$(echo "$INSPECTION_LEVEL" | tr '[:lower:]' '[:upper:]')
+  
   # Write node configuration fields to CSV (early in output for visibility)
-  write_csv "node_type" "$NODE_TYPE"
-  write_csv "environment" "$ENVIRONMENT"
-  write_csv "inspection_level" "$INSPECTION_LEVEL"
-  write_csv "node_fqdn" "$NODE_FQDN"
+  write_csv "NODE_FQDN" "$NODE_FQDN"
+  write_csv "NODE_TYPE" "$NODE_TYPE"
+  write_csv "ENVIRONMENT" "$ENVIRONMENT"
+  write_csv "INSPECTION_LEVEL" "$INSPECTION_LEVEL"
     
   # Detect system information
   detect_os
@@ -2158,14 +2338,27 @@ main() {
   detect_physical_host_id
   
   # Check eligibility
-  check_processor_eligibility
-  check_os_virt_eligibility
+  check_processor_eligibility || {
+    log "ERROR: Processor eligibility check failed - required configuration file missing"
+    write_csv "DETECTION_RESULT" "ERROR"
+  }
+  
+  check_os_virt_eligibility || {
+    log "ERROR: OS/Virtualization eligibility check failed - required configuration file missing"
+    write_csv "DETECTION_RESULT" "ERROR"
+  }
   
   # Calculate considered CPUs based on eligibility and physical constraints
   calculate_considered_cpus
   
   # Detect running webMethods products
-  detect_products
+  detect_products || {
+    log "ERROR: Product detection failed - required configuration file missing"
+    write_csv "DETECTION_RESULT" "ERROR"
+  }
+  
+  # Write success marker as last field in CSV
+  write_csv "DETECTION_RESULT" "SUCCESS"
     
   log "Detection complete. Results written to: ${iwdli_output_file}"
   log "Session log available at: ${iwdli_session_log}"

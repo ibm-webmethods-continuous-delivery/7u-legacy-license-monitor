@@ -1,0 +1,4 @@
+process-grep-pattern,product-mnemo-id-prod,product-mnemo-id-nonprod,process-type,disk-search-enabled,disk-folder-name,disk-exclude-pattern,notes
+IntegrationServer,BPM_R_PRD,BPM_R_NPR,java,yes,IntegrationServer,,Java process with IntegrationServer in command line; Disk search for IntegrationServer directory installations
+awbrokermon,BRK_ONP_PRD,BRK_ONP_NPR,native,yes,Broker,IntegrationServer,Native process with awbrokermon in command line; Disk search excludes Broker subdirs under IntegrationServer
+nserver,UM_ONP_PRD,UM_ONP_NPR,native,yes,UniversalMessaging,,Universal Messaging server process; Disk search for UniversalMessaging directory installations

@@ -1,0 +1,209 @@
+virtualization-vendor,eligible-virtualization-technology,eligible-os,sub-capacity-eligible-form,earliest-version-having-ilmt-support
+IBM Power Systems,PowerVM - DLPAR,AIX 7.1,September 2010,9.0.0
+IBM Power Systems,PowerVM - DLPAR,AIX 7.2,October 2016,9.2.5
+IBM Power Systems,PowerVM - DLPAR,AIX 7.3,December 2021,9.2.26
+IBM Power Systems,PowerVM - DLPAR,IBM i 7.3,October 2016,9.2.5
+IBM Power Systems,PowerVM - DLPAR,IBM i 7.4,March 2020,9.2.19
+IBM Power Systems,PowerVM - DLPAR,IBM i 7.5,July 2022,9.2.28
+IBM Power Systems,PowerVM - DLPAR,IBM i 7.6,July 2025,9.2.40
+IBM Power Systems,PowerVM - DLPAR,Red Hat Enterprise Linux 10,July 2025,9.2.40
+IBM Power Systems,PowerVM - DLPAR,Red Hat Enterprise Linux 7 BE,September 2010,9.0.1.2
+IBM Power Systems,PowerVM - DLPAR,Red Hat Enterprise Linux 7 LE,July 2016,9.2.4
+IBM Power Systems,PowerVM - DLPAR,Red Hat Enterprise Linux 8,November 2020,9.2.21
+IBM Power Systems,PowerVM - DLPAR,Red Hat Enterprise Linux 9,April 2023,9.2.31
+IBM Power Systems,PowerVM - DLPAR,SUSE Linux Enterprise Server 12 LE,January 2017,9.2.6
+IBM Power Systems,PowerVM - DLPAR,SUSE Linux Enterprise Server 15 SP1,March 2020,9.2.18
+IBM Power Systems,PowerVM - Live Partition Mobility,AIX 7.1,September 2010,9.0.0
+IBM Power Systems,PowerVM - Live Partition Mobility,AIX 7.2,October 2016,9.2.5
+IBM Power Systems,PowerVM - Live Partition Mobility,AIX 7.3,December 2021,9.2.26
+IBM Power Systems,PowerVM - Live Partition Mobility,IBM i 7.3,October 2016,9.2.5
+IBM Power Systems,PowerVM - Live Partition Mobility,IBM i 7.4,March 2020,9.2.19
+IBM Power Systems,PowerVM - Live Partition Mobility,IBM i 7.5,July 2022,9.2.28
+IBM Power Systems,PowerVM - Live Partition Mobility,IBM i 7.6,July 2025,9.2.40
+IBM Power Systems,PowerVM - Live Partition Mobility,Red Hat Enterprise Linux 10,July 2025,9.2.40
+IBM Power Systems,PowerVM - Live Partition Mobility,Red Hat Enterprise Linux 7 BE,September 2010,9.0.1.2
+IBM Power Systems,PowerVM - Live Partition Mobility,Red Hat Enterprise Linux 7 LE,July 2016,9.2.4
+IBM Power Systems,PowerVM - Live Partition Mobility,Red Hat Enterprise Linux 8,November 2020,9.2.21
+IBM Power Systems,PowerVM - Live Partition Mobility,Red Hat Enterprise Linux 9,April 2023,9.2.31
+IBM Power Systems,PowerVM - Live Partition Mobility,SUSE Linux Enterprise Server 12 LE,January 2017,9.2.6
+IBM Power Systems,PowerVM - Live Partition Mobility,SUSE Linux Enterprise Server 15 SP1,March 2020,9.2.18
+IBM Power Systems,PowerVM - LPAR,AIX 7.1,September 2010,9.0.0
+IBM Power Systems,PowerVM - LPAR,AIX 7.2,October 2016,9.2.5
+IBM Power Systems,PowerVM - LPAR,AIX 7.3,December 2021,9.2.26
+IBM Power Systems,PowerVM - LPAR,IBM i 7.3,October 2016,9.2.5
+IBM Power Systems,PowerVM - LPAR,IBM i 7.4,March 2020,9.2.19
+IBM Power Systems,PowerVM - LPAR,IBM i 7.5,July 2022,9.2.28
+IBM Power Systems,PowerVM - LPAR,IBM i 7.6,July 2025,9.2.40
+IBM Power Systems,PowerVM - LPAR,Red Hat Enterprise Linux 10,July 2025,9.2.40
+IBM Power Systems,PowerVM - LPAR,Red Hat Enterprise Linux 7 BE,September 2010,9.0.1.2
+IBM Power Systems,PowerVM - LPAR,Red Hat Enterprise Linux 7 LE,July 2016,9.2.4
+IBM Power Systems,PowerVM - LPAR,Red Hat Enterprise Linux 8,November 2020,9.2.21
+IBM Power Systems,PowerVM - LPAR,Red Hat Enterprise Linux 9,April 2023,9.2.31
+IBM Power Systems,PowerVM - LPAR,SUSE Linux Enterprise Server 12 LE,January 2017,9.2.6
+IBM Power Systems,PowerVM - LPAR,SUSE Linux Enterprise Server 15 SP1,March 2020,9.2.19
+IBM Power Systems,PowerVM - Micro-Partitioning,AIX 7.1,September 2010,9.0.0
+IBM Power Systems,PowerVM - Micro-Partitioning,AIX 7.2,October 2016,9.2.5
+IBM Power Systems,PowerVM - Micro-Partitioning,AIX 7.3,December 2021,9.2.26
+IBM Power Systems,PowerVM - Micro-Partitioning,IBM i 7.3,October 2016,9.2.5
+IBM Power Systems,PowerVM - Micro-Partitioning,IBM i 7.4,March 2020,9.2.19
+IBM Power Systems,PowerVM - Micro-Partitioning,IBM i 7.5,July 2022,9.2.28
+IBM Power Systems,PowerVM - Micro-Partitioning,IBM i 7.6,July 2025,9.2.40
+IBM Power Systems,PowerVM - Micro-Partitioning,Red Hat Enterprise Linux 10,July 2025,9.2.40
+IBM Power Systems,PowerVM - Micro-Partitioning,Red Hat Enterprise Linux 7 BE,September 2010,9.0.1.2
+IBM Power Systems,PowerVM - Micro-Partitioning,Red Hat Enterprise Linux 7 LE,July 2016,9.2.4
+IBM Power Systems,PowerVM - Micro-Partitioning,Red Hat Enterprise Linux 8,November 2020,9.2.21
+IBM Power Systems,PowerVM - Micro-Partitioning,Red Hat Enterprise Linux 9,April 2023,9.2.31
+IBM Power Systems,PowerVM - Micro-Partitioning,SUSE Linux Enterprise Server 12 LE,January 2017,9.2.6
+IBM Power Systems,PowerVM - Micro-Partitioning,SUSE Linux Enterprise Server 15 SP1,March 2020,9.2.18
+IBM System z,z/VM with CPU Capping,Red Hat Enterprise Linux 10,July 2025,9.2.40
+IBM System z,z/VM with CPU Capping,Red Hat Enterprise Linux 7,September 2014,9.2.3
+IBM System z,z/VM with CPU Capping,Red Hat Enterprise Linux 8,December 2020,9.2.21
+IBM System z,z/VM with CPU Capping,Red Hat Enterprise Linux 9,April 2023,9.2.31
+IBM System z,z/VM with CPU Capping,SUSE Linux Enterprise Server 12 LE,April 2016,9.2.3
+IBM System z,z/VM with CPU Capping,SUSE Linux Enterprise Server 15 SP1,January 2020,9.2.18
+IBM System z,z/VM with CPU Capping,Ubuntu 20,April 2022,9.2.27
+IBM System z,z/VM with CPU Capping,Ubuntu 22,October 2022,9.2.29
+IBM System z,z/VM,Red Hat Enterprise Linux 10,July 2025,9.2.40
+IBM System z,z/VM,Red Hat Enterprise Linux 7,April 2016,9.2.3
+IBM System z,z/VM,Red Hat Enterprise Linux 8,December 2020,9.2.21
+IBM System z,z/VM,Red Hat Enterprise Linux 9,April 2023,9.2.31
+IBM System z,z/VM,SUSE Linux Enterprise Server 12 LE,April 2016,9.2.3
+IBM System z,z/VM,SUSE Linux Enterprise Server 15 SP1,January 2020,9.2.18
+IBM System z,z/VM,Ubuntu 20,April 2022,9.2.27
+IBM System z,z/VM,Ubuntu 22,October 2022,9.2.29
+Intel/AMD (x86),CITRIX Hypervisor 8.x,CentOS 8,April 2020,9.2.18
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Debian 11,October 2021,9.2.25
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Debian 12,January 2024,9.2.34
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Oracle Linux 8,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Red Hat Enterprise Linux 7,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Red Hat Enterprise Linux 8,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Red Hat Enterprise Linux 9,July 2022,9.2.28
+Intel/AMD (x86),CITRIX Hypervisor 8.x,SUSE Linux Enterprise Server 12,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,SUSE Linux Enterprise Server 15,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Ubuntu 20,July 2020,9.2.20
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Ubuntu 22,July 2022,9.2.28
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Ubuntu 24,October 2024,9.2.37
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows 10,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows 11 Enterprise,December 2021,9.2.26
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows 11 Professional,December 2021,9.2.26
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2016 Datacenter,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2016 Standard,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2019 Datacenter,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2019 Essentials,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2019 Standard,April 2020,9.2.19
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2022 Datacenter,December 2021,9.2.26
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2022 Standard,December 2021,9.2.26
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2025 Datacenter,April 2025,9.2.39
+Intel/AMD (x86),CITRIX Hypervisor 8.x,Windows Server 2025 Standard,April 2025,9.2.39
+Intel/AMD (x86),KVM hypervisor standalone,Red Hat Enterprise Linux 10,July 2025,9.2.40
+Intel/AMD (x86),KVM hypervisor standalone,Red Hat Enterprise Linux 7,June 2015,9.2.0.6
+Intel/AMD (x86),KVM hypervisor standalone,Red Hat Enterprise Linux 8,October 2019,9.2.17
+Intel/AMD (x86),KVM hypervisor standalone,Red Hat Enterprise Linux 9,July 2022,9.2.28
+Intel/AMD (x86),KVM hypervisor standalone,SUSE Linux Enterprise Server 12,January 2016,9.2.1
+Intel/AMD (x86),KVM hypervisor standalone,SUSE Linux Enterprise Server 15,October 2019,9.2.16
+Intel/AMD (x86),KVM hypervisor standalone,Ubuntu 20,December 2020,9.2.20
+Intel/AMD (x86),KVM hypervisor standalone,Ubuntu 22,July 2022,9.2.28
+Intel/AMD (x86),KVM hypervisor standalone,Ubuntu 24,October 2024,9.2.37
+Intel/AMD (x86),KVM hypervisor standalone,Windows 10,October 2015,9.2.1
+Intel/AMD (x86),KVM hypervisor standalone,Windows 11 Enterprise,December 2021,9.2.26
+Intel/AMD (x86),KVM hypervisor standalone,Windows 11 Professional,December 2021,9.2.26
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2016 Datacenter,January 2017,9.2.6
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2016 Standard,January 2017,9.2.6
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2019 Datacenter,April 2019,9.2.15
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2019 Essentials,April 2019,9.2.15
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2019 Standard,April 2019,9.2.15
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2022 Datacenter,December 2021,9.2.26
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2022 Standard,December 2021,9.2.26
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2025 Datacenter,January 2025,9.2.38
+Intel/AMD (x86),KVM hypervisor standalone,Windows Server 2025 Standard,January 2025,9.2.38
+Intel/AMD (x86),MS Hyper-V Server 2016,CentOS 8,January 2020,9.2.18
+Intel/AMD (x86),MS Hyper-V Server 2016,Red Hat Enterprise Linux 7,October 2012,9.2.7
+Intel/AMD (x86),MS Hyper-V Server 2016,Red Hat Enterprise Linux 8,October 2019,9.2.17
+Intel/AMD (x86),MS Hyper-V Server 2016,SUSE Linux Enterprise Server 12,October 2012,9.2.1
+Intel/AMD (x86),MS Hyper-V Server 2016,Ubuntu 20,December 2020,9.2.20
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows 10,October 2012,9.2.7
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows Server 2016 Datacenter,October 2012,9.2.7
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows Server 2016 Standard,October 2012,9.2.7
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows Server 2019 Datacenter,April 2019,9.2.15
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows Server 2019 Standard,April 2019,9.2.15
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows Server 2022 Datacenter,December 2021,9.2.26
+Intel/AMD (x86),MS Hyper-V Server 2016,Windows Server 2022 Standard,December 2021,9.2.26
+Intel/AMD (x86),Nutanix AHV (PRISM),CentOS 8,April 2021,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Debian 11,January 2023,9.2.25
+Intel/AMD (x86),Nutanix AHV (PRISM),Oracle Linux 8,April 2021,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Oracle Linux 9,January 2023,9.2.30
+Intel/AMD (x86),Nutanix AHV (PRISM),Red Hat Enterprise Linux 7,January 2020,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Red Hat Enterprise Linux 8,January 2020,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Red Hat Enterprise Linux 9,July 2022,9.2.28
+Intel/AMD (x86),Nutanix AHV (PRISM),SUSE Linux Enterprise Server 12,April 2021,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),SUSE Linux Enterprise Server 15,April 2021,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Ubuntu 20,April 2021,9.2.20
+Intel/AMD (x86),Nutanix AHV (PRISM),Ubuntu 22,January 2024,9.2.28
+Intel/AMD (x86),Nutanix AHV (PRISM),Ubuntu 24,October 2024,9.2.37
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows 10,April 2021,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2016 Datacenter,January 2020,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2016 Standard,January 2020,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2019 Datacenter,January 2020,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2019 Essentials,April 2019,9.2.15
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2019 Standard,January 2020,9.2.18
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2022 Datacenter,December 2021,9.2.26
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2022 Standard,April 2022,9.2.26
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2025 Datacenter,January 2025,9.2.38
+Intel/AMD (x86),Nutanix AHV (PRISM),Windows Server 2025 Standard,January 2025,9.2.38
+Intel/AMD (x86),Sun Microsystems Containers/Zones - Single Server,Solaris 11,October 2012,9.0.0
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),CentOS 8,January 2020,9.2.18
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Debian 11,October 2021,9.2.25
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Oracle Linux 8,January 2020,9.2.18
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Oracle Linux 9,January 2023,9.2.30
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Red Hat Enterprise Linux 7,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Red Hat Enterprise Linux 8,October 2019,9.2.17
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Red Hat Enterprise Linux 9,July 2022,9.2.28
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Solaris 11,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),SUSE Linux Enterprise Server 12,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),SUSE Linux Enterprise Server 15,October 2019,9.2.17
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Ubuntu 20,July 2020,9.2.20
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Ubuntu 22,July 2022,9.2.28
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Ubuntu 24,October 2024,9.2.37
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows 10,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows 11 Enterprise,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows 11 Professional,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2016 Datacenter,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2016 Standard,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2019 Datacenter,April 2019,9.2.15
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2019 Essentials,April 2019,9.2.15
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2019 Standard,April 2019,9.2.15
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2022 Datacenter,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2022 Standard,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2025 Datacenter,January 2025,9.2.38
+Intel/AMD (x86),VMware vSphere 7 (ESXi 7),Windows Server 2025 Standard,January 2025,9.2.38
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),CentOS 8,January 2020,9.2.18
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Debian 11,October 2021,9.2.25
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Debian 12,January 2024,9.2.34
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Oracle Linux 8,January 2020,9.2.18
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Oracle Linux 9,January 2023,9.2.30
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Red Hat Enterprise Linux 7,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Red Hat Enterprise Linux 8,October 2019,9.2.17
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Red Hat Enterprise Linux 9,July 2022,9.2.28
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Solaris 11,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),SUSE Linux Enterprise Server 12,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),SUSE Linux Enterprise Server 15,October 2019,9.2.17
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Ubuntu 20,July 2020,9.2.20
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Ubuntu 22,July 2022,9.2.28
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Ubuntu 24,October 2024,9.2.37
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows 10,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows 11 Enterprise,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows 11 Professional,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2016 Datacenter,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2016 Standard,October 2018,9.2.13
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2019 Datacenter,April 2019,9.2.15
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2019 Essentials,April 2019,9.2.15
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2019 Standard,April 2019,9.2.15
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2022 Datacenter,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2022 Standard,December 2021,9.2.26
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2025 Datacenter,January 2025,9.2.38
+Intel/AMD (x86),VMware vSphere 8 (ESXi 8),Windows Server 2025 Standard,January 2025,9.2.38
+Oracle (UltraSPARC and SPARC),Containers/Zones - inside Dynamic Domains,Solaris 11,July 2012,9.0.0
+Oracle (UltraSPARC and SPARC),Containers/Zones - inside node OS,Solaris 11,July 2012,9.0.0
+Oracle (UltraSPARC and SPARC),Containers/Zones - inside Oracle VM Server for SPARC 3.x,Solaris 11,November 2013,9.0.1.1
+Oracle (UltraSPARC and SPARC),Oracle VM Server for SPARC 3.x,Solaris 11,November 2014,9.0.1.2
+Oracle (UltraSPARC and SPARC),Dynamic Domains,Solaris 11,July 2012,9.0.0

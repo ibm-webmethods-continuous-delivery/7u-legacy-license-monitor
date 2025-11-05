@@ -1,0 +1,5 @@
+Parameter,Value
+DETECTION_TIMESTAMP,2025-10-31T15:32:12Z
+SESSION_AUDIT_DIRECTORY,/tmp/iwdlm/test/default/20251031_165754/iwdli_home/audit/2025-10-31_155754
+DETECTION_RESULT=ERROR
+ERROR_MESSAGE=Given landscape configuration folder has not been provided
