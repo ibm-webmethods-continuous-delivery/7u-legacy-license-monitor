@@ -45,7 +45,7 @@ The database schema includes:
 - import_sessions: Import audit trail
 
 Example:
-  go-sqlite-cli init --db-path ./data/license-monitor.db`,
+  iwdlr init --db-path ./data/license-monitor.db`,
 		RunE: runInit,
 	}
 
@@ -96,8 +96,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Schema version: %s\n", version)
 	fmt.Println("\nDatabase ready for import operations.")
 	fmt.Println("\nNext steps:")
-	fmt.Println("  1. Import inspector CSV files: go-sqlite-cli import --file <csv-file>")
-	fmt.Println("  2. Generate reports: go-sqlite-cli report --help")
+	fmt.Println("  1. Import inspector CSV files: iwdlr import --file <csv-file>")
+	fmt.Println("  2. Generate reports: iwdlr report --help")
 
 	return nil
 }

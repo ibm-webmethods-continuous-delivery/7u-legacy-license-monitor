@@ -26,7 +26,10 @@ SELECT
     -- Physical host details
     m.physical_host_id,
     CASE 
-        WHEN m.host_physical_cpus = 'unknown' THEN NULL
+        -- For physical hosts (non-virtualized), use cpu_count as physical cores
+        WHEN m.is_virtualized = 'no' THEN m.cpu_count
+        -- For VMs, use host_physical_cpus if available
+        WHEN m.host_physical_cpus = 'unknown' OR m.host_physical_cpus = '' THEN NULL
         ELSE CAST(m.host_physical_cpus AS INTEGER)
     END as physical_host_cores,
     -- Breakdown: eligible vs ineligible
@@ -393,3 +396,239 @@ FROM measurements m
 JOIN detected_products d ON m.main_fqdn = d.main_fqdn 
     AND m.detection_timestamp = d.detection_timestamp
 ORDER BY date DESC, host_fqdn, product_code;
+
+-- View 6: Peak Usage Summary
+-- Shows maximum usage per product over last 31 days
+-- Properly calculates: MAX per host per day, then SUM with physical host deduplication
+CREATE VIEW IF NOT EXISTS v_peak_usage AS
+WITH daily_host_peaks AS (
+    -- Step 1: For each host/day/product, take the MAX of all measurements
+    SELECT 
+        DATE(m.detection_timestamp) as measurement_date,
+        p.product_mnemo_code,
+        p.ibm_product_code,
+        p.product_name,
+        p.mode,
+        l.term_id,
+        l.program_number,
+        l.program_name,
+        d.main_fqdn,
+        d.status,
+        d.install_count,
+        m.physical_host_id,
+        m.host_physical_cpus,
+        MAX(m.considered_cpus) as max_considered_cpus,
+        MAX(CASE WHEN m.is_virtualized = 'yes' THEN m.cpu_count ELSE 0 END) as max_vcores,
+        MAX(CASE WHEN m.is_virtualized = 'no' THEN m.cpu_count ELSE 0 END) as max_physical_cores,
+        MAX(CASE 
+            WHEN m.os_eligible = 'true' AND m.virt_eligible = 'true' 
+            THEN m.considered_cpus 
+            ELSE 0 
+        END) as max_eligible_cores,
+        MAX(CASE 
+            WHEN m.os_eligible = 'false' OR m.virt_eligible = 'false' 
+            THEN m.considered_cpus 
+            ELSE 0 
+        END) as max_ineligible_cores,
+        -- Track actual VM cores for comparison (regardless of eligibility)
+        MAX(m.cpu_count) as max_actual_cores
+    FROM detected_products d
+    JOIN product_codes p ON d.product_mnemo_code = p.product_mnemo_code
+    JOIN license_terms l ON p.term_id = l.term_id
+    JOIN measurements m ON d.main_fqdn = m.main_fqdn 
+        AND d.detection_timestamp = m.detection_timestamp
+    WHERE DATE(m.detection_timestamp) >= DATE('now', '-31 days')
+    GROUP BY DATE(m.detection_timestamp), p.product_mnemo_code, p.ibm_product_code, 
+             p.product_name, p.mode, l.term_id, l.program_number, l.program_name,
+             d.main_fqdn, d.status, d.install_count, m.physical_host_id, m.host_physical_cpus
+),
+daily_product_totals AS (
+    -- Step 2: Sum host peaks per day per product WITH physical host deduplication
+    SELECT 
+        measurement_date,
+        product_mnemo_code,
+        ibm_product_code,
+        product_name,
+        mode,
+        term_id,
+        program_number,
+        program_name,
+        -- For eligible cores: direct sum (no physical host deduplication needed)
+        SUM(CASE WHEN status = 'present' AND max_eligible_cores > 0 THEN max_eligible_cores ELSE 0 END) as running_eligible,
+        -- For ineligible cores on running VMs: use physical host cores, deduplicated
+        -- We group by physical_host_id and take MAX to avoid double-counting
+        (SELECT SUM(phys_cores)
+         FROM (
+             SELECT DISTINCT 
+                 physical_host_id,
+                 CASE 
+                     WHEN host_physical_cpus != 'unknown' THEN CAST(host_physical_cpus AS INTEGER)
+                     ELSE MAX(max_ineligible_cores)
+                 END as phys_cores
+             FROM daily_host_peaks dhp_inner
+             WHERE dhp_inner.measurement_date = daily_host_peaks.measurement_date
+               AND dhp_inner.product_mnemo_code = daily_host_peaks.product_mnemo_code
+               AND dhp_inner.status = 'present'
+               AND dhp_inner.max_ineligible_cores > 0
+             GROUP BY physical_host_id, host_physical_cpus
+         )
+        ) as running_ineligible,
+        -- Node counts
+        COUNT(DISTINCT CASE WHEN status = 'present' THEN main_fqdn END) as running_nodes,
+        COUNT(DISTINCT CASE WHEN install_count > 0 THEN main_fqdn END) as installed_nodes,
+        -- Actual virtual cores (regardless of eligibility) - direct sum
+        SUM(CASE WHEN status = 'present' THEN max_actual_cores ELSE 0 END) as running_actual_cores
+    FROM daily_host_peaks
+    GROUP BY measurement_date, product_mnemo_code, ibm_product_code, product_name, 
+             mode, term_id, program_number, program_name
+)
+SELECT 
+    product_mnemo_code,
+    ibm_product_code,
+    product_name,
+    mode,
+    term_id,
+    program_number,
+    program_name,
+    -- Peak running cores (MAX across all days) - sum of eligible + ineligible with deduplication
+    MAX(running_eligible + COALESCE(running_ineligible, 0)) as peak_running_vcores,
+    0 as peak_running_physical_cores,
+    MAX(running_eligible + COALESCE(running_ineligible, 0)) as peak_running_total_cores,
+    -- Peak installed - simplified for now
+    0 as peak_installed_vcores,
+    0 as peak_installed_physical_cores,
+    0 as peak_installed_total_cores,
+    -- Peak nodes
+    MAX(running_nodes) as peak_running_nodes,
+    MAX(installed_nodes) as peak_installed_nodes,
+    -- Peak eligible/ineligible
+    MAX(running_eligible) as peak_eligible_cores,
+    MAX(COALESCE(running_ineligible, 0)) as peak_ineligible_cores,
+    -- Peak actual virtual cores (regardless of eligibility) for comparison
+    MAX(running_actual_cores) as peak_actual_vcores,
+    -- Date when peak occurred (for running total cores)
+    (SELECT measurement_date 
+     FROM daily_product_totals dpt2 
+     WHERE dpt2.product_mnemo_code = daily_product_totals.product_mnemo_code 
+     ORDER BY (running_eligible + COALESCE(running_ineligible, 0)) DESC 
+     LIMIT 1) as peak_date
+FROM daily_product_totals
+GROUP BY product_mnemo_code, ibm_product_code, product_name, mode,
+         term_id, program_number, program_name
+ORDER BY MAX(running_eligible + COALESCE(running_ineligible, 0)) DESC, product_mnemo_code;
+
+-- View 7: Peak Usage Breakdown
+-- Shows daily breakdown for a product with host-level details
+-- Properly calculates: MAX per host per day (one row per host showing peak)
+-- Applies physical host deduplication when calculating daily totals
+CREATE VIEW IF NOT EXISTS v_peak_usage_breakdown AS
+WITH daily_host_peaks AS (
+    -- Step 1: For each host/day/product, take the MAX of all measurements
+    -- This collapses multiple measurements per host down to one peak value
+    SELECT 
+        measurement_date,
+        product_mnemo_code,
+        main_fqdn,
+        -- Take first hostname (they should all be same for a main_fqdn)
+        MIN(hostname) as hostname,
+        MAX(vm_cores) as max_vm_cores,
+        MAX(license_cores) as max_license_cores,
+        MAX(eligible_cores) as max_eligible_cores,
+        MAX(ineligible_cores) as max_ineligible_cores,
+        MIN(physical_host_id) as physical_host_id,
+        MIN(physical_host_cores) as physical_host_cores,
+        -- Keep first values for descriptive fields
+        MIN(processor_eligible) as processor_eligible,
+        MIN(os_eligible) as os_eligible,
+        MIN(virt_eligible) as virt_eligible,
+        MIN(product_status) as product_status,
+        MAX(install_count) as install_count,
+        MIN(os_name) as os_name,
+        MIN(os_version) as os_version,
+        MIN(is_virtualized) as is_virtualized,
+        COUNT(*) as instance_count
+    FROM v_core_aggregation_by_product
+    WHERE measurement_date >= DATE('now', '-31 days')
+      AND product_status = 'present'
+    GROUP BY measurement_date, product_mnemo_code, main_fqdn
+),
+daily_product_totals_dedup AS (
+    -- Step 2: Calculate daily totals WITH physical host deduplication
+    SELECT DISTINCT
+        measurement_date,
+        product_mnemo_code,
+        -- For eligible cores: direct sum (no physical host deduplication needed)
+        (SELECT SUM(max_eligible_cores)
+         FROM daily_host_peaks dhp_inner
+         WHERE dhp_inner.measurement_date = daily_host_peaks.measurement_date
+           AND dhp_inner.product_mnemo_code = daily_host_peaks.product_mnemo_code
+        ) as total_eligible,
+        -- For ineligible cores: use physical host cores, deduplicated
+        (SELECT SUM(phys_cores)
+         FROM (
+             SELECT DISTINCT 
+                 physical_host_id,
+                 CASE 
+                     WHEN physical_host_cores != 'unknown' THEN CAST(physical_host_cores AS INTEGER)
+                     ELSE MAX(max_ineligible_cores)
+                 END as phys_cores
+             FROM daily_host_peaks dhp_inner
+             WHERE dhp_inner.measurement_date = daily_host_peaks.measurement_date
+               AND dhp_inner.product_mnemo_code = daily_host_peaks.product_mnemo_code
+               AND dhp_inner.max_ineligible_cores > 0
+             GROUP BY physical_host_id, physical_host_cores
+         )
+        ) as total_ineligible,
+        -- Node count
+        COUNT(DISTINCT main_fqdn) as total_nodes
+    FROM daily_host_peaks
+    GROUP BY measurement_date, product_mnemo_code
+)
+SELECT 
+    hp.measurement_date,
+    hp.product_mnemo_code,
+    p.ibm_product_code,
+    p.product_name,
+    p.mode,
+    hp.main_fqdn,
+    hp.hostname,
+    hp.max_vm_cores as vm_cores,
+    hp.max_license_cores as license_cores,
+    hp.physical_host_id,
+    hp.physical_host_cores,
+    hp.max_eligible_cores as eligible_cores,
+    hp.max_ineligible_cores as ineligible_cores,
+    hp.processor_eligible,
+    hp.os_eligible,
+    hp.virt_eligible,
+    hp.product_status,
+    hp.install_count,
+    hp.instance_count,
+    hp.os_name,
+    hp.os_version,
+    hp.is_virtualized,
+    -- Daily total for this product (sum with physical host deduplication)
+    dt.total_eligible + COALESCE(dt.total_ineligible, 0) as daily_running_total,
+    dt.total_nodes as daily_running_nodes,
+    -- Flag indicating if this host's ineligible cores are deduplicated (not counted)
+    -- A host is deduplicated if it has ineligible cores AND it's not the first occurrence of its physical_host_id
+    CASE 
+        WHEN hp.max_ineligible_cores > 0 
+         AND hp.physical_host_id != ''
+         AND hp.main_fqdn != (
+             SELECT MIN(main_fqdn) 
+             FROM daily_host_peaks dhp2
+             WHERE dhp2.measurement_date = hp.measurement_date
+               AND dhp2.product_mnemo_code = hp.product_mnemo_code
+               AND dhp2.physical_host_id = hp.physical_host_id
+               AND dhp2.max_ineligible_cores > 0
+         )
+        THEN hp.max_ineligible_cores
+        ELSE 0
+    END as deduplicated_cores
+FROM daily_host_peaks hp
+JOIN product_codes p ON hp.product_mnemo_code = p.product_mnemo_code
+JOIN daily_product_totals_dedup dt 
+    ON hp.product_mnemo_code = dt.product_mnemo_code 
+    AND hp.measurement_date = dt.measurement_date
+ORDER BY hp.measurement_date DESC, hp.product_mnemo_code, hp.max_license_cores DESC;

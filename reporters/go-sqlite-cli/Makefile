@@ -198,6 +198,9 @@ acceptance-test-verify:
 	@echo "5. Hosts Report (first 5 rows):"
 	@./$(BUILD_DIR)/$(BINARY_NAME) report hosts --db-path $(ACCEPTANCE_DB) --format table | head -7
 	@echo ""
+	@echo "6. Peak Usage Report (last 31 days):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report peak --db-path $(ACCEPTANCE_DB) --format table
+	@echo ""
 	@echo "========================================="
 	@echo "Verification Complete"
 	@echo "========================================="

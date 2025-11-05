@@ -61,13 +61,13 @@ Folder-based workflow:
 
 Example:
   # Import single file
-  go-sqlite-cli import --db-path ./data/license-monitor.db --file ./iwdli_output_omis446_20251021_090906.csv
+  iwdlr import --db-path ./data/license-monitor.db --file ./iwdli_output_omis446_20251021_090906.csv
 
   # Import all files in directory (no file movement)
-  go-sqlite-cli import --db-path ./data/license-monitor.db --dir ./input/
+  iwdlr import --db-path ./data/license-monitor.db --dir ./input/
 
   # Import with folder workflow (files are moved after processing)
-  go-sqlite-cli import --db-path ./data/license-monitor.db --input-dir ./test-data/input`,
+  iwdlr import --db-path ./data/license-monitor.db --input-dir ./test-data/input`,
 		RunE: runImport,
 	}
 
@@ -117,7 +117,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	// Check database exists
 	if _, err := os.Stat(importDBPath); os.IsNotExist(err) {
-		return fmt.Errorf("database does not exist at %s\nRun 'go-sqlite-cli init' first", importDBPath)
+		return fmt.Errorf("database does not exist at %s\nRun 'iwdlr init' first", importDBPath)
 	}
 
 	// Setup folder-based workflow if using input-dir
@@ -308,7 +308,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nNext steps:")
-	fmt.Println("  - Generate reports: go-sqlite-cli report --help")
+	fmt.Println("  - Generate reports: iwdlr report --help")
 	fmt.Println("  - Query data: sqlite3", importDBPath)
 
 	return nil

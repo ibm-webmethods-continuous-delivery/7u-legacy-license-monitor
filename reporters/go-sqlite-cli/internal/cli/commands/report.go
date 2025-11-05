@@ -38,9 +38,9 @@ Displays virtual cores, physical cores (deduplicated), and installation counts.
 Separates running products (status='present') from installed products.
 
 Example:
-  go-sqlite-cli report daily-summary --db-path data/license-monitor.db
-  go-sqlite-cli report daily-summary --format csv --output report.csv
-  go-sqlite-cli report daily-summary --from 2025-10-01 --to 2025-10-31`,
+  iwdlr report daily-summary --db-path data/license-monitor.db
+  iwdlr report daily-summary --format csv --output report.csv
+  iwdlr report daily-summary --from 2025-10-01 --to 2025-10-31`,
 	RunE:  runReportDailySummary,
 }
 
@@ -53,10 +53,42 @@ Displays host FQDN, date, virtualization status, product codes, running/installe
 CPU counts, physical host mapping, OS details, and eligibility flags.
 
 Example:
-  go-sqlite-cli report host-detail --db-path data/license-monitor.db
-  go-sqlite-cli report host-detail --host i4.local --format csv
-  go-sqlite-cli report host-detail --product IS_ONP_PRD --from 2025-10-01`,
+  iwdlr report host-detail --db-path data/license-monitor.db
+  iwdlr report host-detail --host i4.local --format csv
+  iwdlr report host-detail --product IS_ONP_PRD --from 2025-10-01`,
 	RunE:  runReportHostDetail,
+}
+
+var reportPeakUsageCmd = &cobra.Command{
+	Use:   "peak",
+	Short: "Generate peak usage report (last 31 days)",
+	Long: `Shows maximum license usage per product over the last 31 days.
+
+Displays the highest values recorded for running and installed cores, nodes, and 
+eligibility metrics. Useful for capacity planning and license compliance monitoring.
+
+Example:
+  iwdlr report peak --db-path data/license-monitor.db
+  iwdlr report peak --format csv --output peak-usage.csv
+  iwdlr report peak --product IS_ONP_PRD --format json`,
+	RunE:  runReportPeakUsage,
+}
+
+var reportPeakBreakdownCmd = &cobra.Command{
+	Use:   "peak-breakdown",
+	Short: "Generate detailed peak usage breakdown",
+	Long: `Shows day-by-day breakdown of license usage for a product with host-level details.
+
+This report helps answer "why did product X reach peak usage of Y cores?"
+by showing all hosts contributing to the usage on each day.
+
+Requires --product flag to specify which product to analyze.
+
+Example:
+  iwdlr report peak-breakdown --product IS_ONP_NPR
+  iwdlr report peak-breakdown --product BRK_ONP_PRD --from 2025-10-25
+  iwdlr report peak-breakdown --product IS_ONP_NPR --format csv --output breakdown.csv`,
+	RunE:  runReportPeakBreakdown,
 }
 
 var (
@@ -76,6 +108,8 @@ func init() {
 	reportCmd.AddCommand(reportCoresCmd)
 	reportCmd.AddCommand(reportDailySummaryCmd)
 	reportCmd.AddCommand(reportHostDetailCmd)
+	reportCmd.AddCommand(reportPeakUsageCmd)
+	reportCmd.AddCommand(reportPeakBreakdownCmd)
 	
 	// Global report flags
 	reportCmd.PersistentFlags().StringVar(&reportDBPath, "db-path", "data/license-monitor.db", "Path to the SQLite database file")
@@ -293,4 +327,123 @@ fmt.Printf("Report written to %s\n", reportOutput)
 }
 
 return nil
+}
+
+func runReportPeakUsage(cmd *cobra.Command, args []string) error {
+	// Open database
+	db, err := database.Connect(reportDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+	
+	// Create report generator
+	report := reports.NewPeakUsageReport(db)
+	
+	// Query data
+	rows, err := report.Query(reportProduct)
+	if err != nil {
+		return fmt.Errorf("failed to query data: %w", err)
+	}
+	
+	if len(rows) == 0 {
+		fmt.Println("No data found for the last 31 days")
+		return nil
+	}
+	
+	// Determine output writer
+	var writer *os.File
+	if reportOutput != "" {
+		writer, err = os.Create(reportOutput)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+		defer writer.Close()
+	} else {
+		writer = os.Stdout
+	}
+	
+	// Write output in requested format
+	switch reportFormat {
+	case "table":
+		err = report.WriteTable(writer, rows)
+	case "csv":
+		err = report.WriteCSV(writer, rows)
+	case "json":
+		err = report.WriteJSON(writer, rows)
+	default:
+		return fmt.Errorf("unknown format: %s (use table, csv, or json)", reportFormat)
+	}
+	
+	if err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	
+	if reportOutput != "" {
+		fmt.Printf("Report written to %s\n", reportOutput)
+	}
+	
+	return nil
+}
+
+func runReportPeakBreakdown(cmd *cobra.Command, args []string) error {
+	// Require product filter
+	if reportProduct == "" {
+		return fmt.Errorf("--product flag is required for peak-breakdown report")
+	}
+	
+	// Open database
+	db, err := database.Connect(reportDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+	
+	// Create report generator
+	report := reports.NewPeakBreakdownReport(db)
+	
+	// Query data
+	rows, err := report.Query(reportProduct, reportFromDate, reportToDate)
+	if err != nil {
+		return fmt.Errorf("failed to query data: %w", err)
+	}
+	
+	if len(rows) == 0 {
+		fmt.Printf("No data found for product %s in the last 31 days\n", reportProduct)
+		return nil
+	}
+	
+	// Determine output writer
+	var writer *os.File
+	if reportOutput != "" {
+		writer, err = os.Create(reportOutput)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+		defer writer.Close()
+	} else {
+		writer = os.Stdout
+	}
+	
+	// Write output in requested format
+	switch reportFormat {
+	case "table":
+		err = report.WriteTable(writer, rows)
+	case "csv":
+		err = report.WriteCSV(writer, rows)
+	case "json":
+		err = report.WriteJSON(writer, rows)
+	default:
+		return fmt.Errorf("unknown format: %s (use table, csv, or json)", reportFormat)
+	}
+	
+	if err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	
+	if reportOutput != "" {
+		fmt.Printf("Report written to %s\n", reportOutput)
+	}
+	
+	return nil
 }
