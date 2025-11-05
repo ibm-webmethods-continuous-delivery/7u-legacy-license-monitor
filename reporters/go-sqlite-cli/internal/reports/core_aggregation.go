@@ -13,14 +13,27 @@ import (
 
 // CoreAggregationRow represents a row from v_core_aggregation_by_product
 type CoreAggregationRow struct {
-	ProductCode       string    `json:"product_code"`
-	ProductName       string    `json:"product_name"`
-	MeasurementDate   time.Time `json:"measurement_date"`
-	TotalCores        int       `json:"total_cores"`
-	LicensedCores     int       `json:"licensed_cores"`
-	UnlicensedCores   int       `json:"unlicensed_cores"`
-	NonProdCores      int       `json:"non_prod_cores"`
-	ThirdPartyCores   int       `json:"third_party_cores"`
+	MeasurementDate    time.Time `json:"measurement_date"`
+	ProductMnemoCode   string    `json:"product_mnemo_code"`
+	ProductName        string    `json:"product_name"`
+	Mode               string    `json:"mode"`
+	MainFQDN           string    `json:"main_fqdn"`
+	Hostname           string    `json:"hostname"`
+	VMCores            int       `json:"vm_cores"`
+	PartitionCores     int       `json:"partition_cores"`
+	ProcessorEligible  string    `json:"processor_eligible"`
+	OSEligible         string    `json:"os_eligible"`
+	VirtEligible       string    `json:"virt_eligible"`
+	LicenseCores       int       `json:"license_cores"`
+	PhysicalHostID     string    `json:"physical_host_id"`
+	PhysicalHostCores  *int      `json:"physical_host_cores"`
+	EligibleCores      int       `json:"eligible_cores"`
+	IneligibleCores    int       `json:"ineligible_cores"`
+	ProductStatus      string    `json:"product_status"`
+	InstallCount       int       `json:"install_count"`
+	IsVirtualized      string    `json:"is_virtualized"`
+	OSName             string    `json:"os_name"`
+	OSVersion          string    `json:"os_version"`
 }
 
 // CoreAggregationReport generates reports from v_core_aggregation_by_product view
@@ -37,14 +50,27 @@ func NewCoreAggregationReport(db *sql.DB) *CoreAggregationReport {
 func (r *CoreAggregationReport) Query(productCode string, fromDate, toDate *time.Time) ([]CoreAggregationRow, error) {
 	query := `
 		SELECT 
-			product_code,
-			product_name,
 			measurement_date,
-			total_cores,
-			licensed_cores,
-			unlicensed_cores,
-			non_prod_cores,
-			third_party_cores
+			product_mnemo_code,
+			product_name,
+			mode,
+			main_fqdn,
+			hostname,
+			vm_cores,
+			partition_cores,
+			processor_eligible,
+			os_eligible,
+			virt_eligible,
+			license_cores,
+			physical_host_id,
+			physical_host_cores,
+			eligible_cores,
+			ineligible_cores,
+			product_status,
+			install_count,
+			is_virtualized,
+			os_name,
+			os_version
 		FROM v_core_aggregation_by_product
 		WHERE 1=1
 	`
@@ -52,7 +78,7 @@ func (r *CoreAggregationReport) Query(productCode string, fromDate, toDate *time
 	args := []interface{}{}
 	
 	if productCode != "" {
-		query += " AND product_code = ?"
+		query += " AND product_mnemo_code = ?"
 		args = append(args, productCode)
 	}
 	
@@ -66,7 +92,7 @@ func (r *CoreAggregationReport) Query(productCode string, fromDate, toDate *time
 		args = append(args, toDate.Format("2006-01-02"))
 	}
 	
-	query += " ORDER BY product_code, measurement_date DESC"
+	query += " ORDER BY measurement_date DESC, product_mnemo_code, hostname"
 	
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -78,16 +104,30 @@ func (r *CoreAggregationReport) Query(productCode string, fromDate, toDate *time
 	for rows.Next() {
 		var row CoreAggregationRow
 		var dateStr string
+		var physicalHostCores sql.NullInt64
 		
 		err := rows.Scan(
-			&row.ProductCode,
-			&row.ProductName,
 			&dateStr,
-			&row.TotalCores,
-			&row.LicensedCores,
-			&row.UnlicensedCores,
-			&row.NonProdCores,
-			&row.ThirdPartyCores,
+			&row.ProductMnemoCode,
+			&row.ProductName,
+			&row.Mode,
+			&row.MainFQDN,
+			&row.Hostname,
+			&row.VMCores,
+			&row.PartitionCores,
+			&row.ProcessorEligible,
+			&row.OSEligible,
+			&row.VirtEligible,
+			&row.LicenseCores,
+			&row.PhysicalHostID,
+			&physicalHostCores,
+			&row.EligibleCores,
+			&row.IneligibleCores,
+			&row.ProductStatus,
+			&row.InstallCount,
+			&row.IsVirtualized,
+			&row.OSName,
+			&row.OSVersion,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
@@ -97,6 +137,12 @@ func (r *CoreAggregationReport) Query(productCode string, fromDate, toDate *time
 		row.MeasurementDate, err = time.Parse("2006-01-02", dateStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse date: %w", err)
+		}
+		
+		// Handle NULL physical_host_cores
+		if physicalHostCores.Valid {
+			cores := int(physicalHostCores.Int64)
+			row.PhysicalHostCores = &cores
 		}
 		
 		results = append(results, row)
@@ -111,36 +157,45 @@ func (r *CoreAggregationReport) WriteTable(w io.Writer, rows []CoreAggregationRo
 	defer tw.Flush()
 	
 	// Header
-	fmt.Fprintln(tw, "PRODUCT CODE\tPRODUCT NAME\tDATE\tTOTAL\tLICENSED\tUNLICENSED\tNON-PROD\t3RD-PARTY")
+	fmt.Fprintln(tw, "DATE\tPRODUCT\tHOSTNAME\tVM_CORES\tLIC_CORES\tELIG\tINELIG\tPHYS_ID\tSTATUS")
 	fmt.Fprintln(tw, strings.Repeat("-", 120))
 	
 	// Data rows
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",
-			row.ProductCode,
-			row.ProductName,
+		physCores := "N/A"
+		if row.PhysicalHostCores != nil {
+			physCores = fmt.Sprintf("%d", *row.PhysicalHostCores)
+		}
+		
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t%s (phys: %s)\t%s\n",
 			row.MeasurementDate.Format("2006-01-02"),
-			row.TotalCores,
-			row.LicensedCores,
-			row.UnlicensedCores,
-			row.NonProdCores,
-			row.ThirdPartyCores,
+			row.ProductMnemoCode,
+			row.Hostname,
+			row.VMCores,
+			row.LicenseCores,
+			row.EligibleCores,
+			row.IneligibleCores,
+			row.PhysicalHostID,
+			physCores,
+			row.ProductStatus,
 		)
 	}
 	
 	// Summary
 	if len(rows) > 0 {
-		totalCores := 0
-		licensedCores := 0
-		unlicensedCores := 0
+		totalVM := 0
+		totalLic := 0
+		totalElig := 0
+		totalInelig := 0
 		for _, row := range rows {
-			totalCores += row.TotalCores
-			licensedCores += row.LicensedCores
-			unlicensedCores += row.UnlicensedCores
+			totalVM += row.VMCores
+			totalLic += row.LicenseCores
+			totalElig += row.EligibleCores
+			totalInelig += row.IneligibleCores
 		}
 		
 		fmt.Fprintln(tw, strings.Repeat("-", 120))
-		fmt.Fprintf(tw, "TOTAL\t\t\t%d\t%d\t%d\t\t\n", totalCores, licensedCores, unlicensedCores)
+		fmt.Fprintf(tw, "TOTAL\t\t\t%d\t%d\t%d\t%d\t\t\n", totalVM, totalLic, totalElig, totalInelig)
 	}
 	
 	return nil
@@ -153,14 +208,27 @@ func (r *CoreAggregationReport) WriteCSV(w io.Writer, rows []CoreAggregationRow)
 	
 	// Header
 	err := writer.Write([]string{
-		"product_code",
-		"product_name",
 		"measurement_date",
-		"total_cores",
-		"licensed_cores",
-		"unlicensed_cores",
-		"non_prod_cores",
-		"third_party_cores",
+		"product_mnemo_code",
+		"product_name",
+		"mode",
+		"main_fqdn",
+		"hostname",
+		"vm_cores",
+		"partition_cores",
+		"processor_eligible",
+		"os_eligible",
+		"virt_eligible",
+		"license_cores",
+		"physical_host_id",
+		"physical_host_cores",
+		"eligible_cores",
+		"ineligible_cores",
+		"product_status",
+		"install_count",
+		"is_virtualized",
+		"os_name",
+		"os_version",
 	})
 	if err != nil {
 		return err
@@ -168,15 +236,33 @@ func (r *CoreAggregationReport) WriteCSV(w io.Writer, rows []CoreAggregationRow)
 	
 	// Data rows
 	for _, row := range rows {
+		physCores := ""
+		if row.PhysicalHostCores != nil {
+			physCores = fmt.Sprintf("%d", *row.PhysicalHostCores)
+		}
+		
 		err := writer.Write([]string{
-			row.ProductCode,
-			row.ProductName,
 			row.MeasurementDate.Format("2006-01-02"),
-			fmt.Sprintf("%d", row.TotalCores),
-			fmt.Sprintf("%d", row.LicensedCores),
-			fmt.Sprintf("%d", row.UnlicensedCores),
-			fmt.Sprintf("%d", row.NonProdCores),
-			fmt.Sprintf("%d", row.ThirdPartyCores),
+			row.ProductMnemoCode,
+			row.ProductName,
+			row.Mode,
+			row.MainFQDN,
+			row.Hostname,
+			fmt.Sprintf("%d", row.VMCores),
+			fmt.Sprintf("%d", row.PartitionCores),
+			row.ProcessorEligible,
+			row.OSEligible,
+			row.VirtEligible,
+			fmt.Sprintf("%d", row.LicenseCores),
+			row.PhysicalHostID,
+			physCores,
+			fmt.Sprintf("%d", row.EligibleCores),
+			fmt.Sprintf("%d", row.IneligibleCores),
+			row.ProductStatus,
+			fmt.Sprintf("%d", row.InstallCount),
+			row.IsVirtualized,
+			row.OSName,
+			row.OSVersion,
 		})
 		if err != nil {
 			return err

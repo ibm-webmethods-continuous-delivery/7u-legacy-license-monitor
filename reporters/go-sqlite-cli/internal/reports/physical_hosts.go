@@ -12,10 +12,15 @@ import (
 
 // PhysicalHostRow represents a row from v_physical_host_cores_aggregated
 type PhysicalHostRow struct {
-	PhysicalHostID   string `json:"physical_host_id"`
-	SystemType       string `json:"system_type"`
-	TotalCores       int    `json:"total_cores"`
-	VMCount          int    `json:"vm_count"`
+	MeasurementDate    string `json:"measurement_date"`
+	PhysicalHostID     string `json:"physical_host_id"`
+	HostIDMethod       string `json:"host_id_method"`
+	HostIDConfidence   string `json:"host_id_confidence"`
+	PhysicalCores      int    `json:"physical_cores"`
+	VMCount            int    `json:"vm_count"`
+	VMList             string `json:"vm_list"`
+	TotalVMCores       int    `json:"total_vm_cores"`
+	LatestMeasurement  string `json:"latest_measurement"`
 }
 
 // PhysicalHostReport generates reports from v_physical_host_cores_aggregated view
@@ -32,22 +37,25 @@ func NewPhysicalHostReport(db *sql.DB) *PhysicalHostReport {
 func (r *PhysicalHostReport) Query(systemType string) ([]PhysicalHostRow, error) {
 	query := `
 		SELECT 
+			measurement_date,
 			physical_host_id,
-			system_type,
-			total_cores,
-			vm_count
+			host_id_method,
+			host_id_confidence,
+			physical_cores,
+			vm_count,
+			vm_list,
+			total_vm_cores,
+			latest_measurement
 		FROM v_physical_host_cores_aggregated
 		WHERE 1=1
 	`
 	
 	args := []interface{}{}
 	
-	if systemType != "" {
-		query += " AND system_type = ?"
-		args = append(args, systemType)
-	}
+	// Note: system_type filter removed as it doesn't exist in the view
+	// The view groups by date and physical host
 	
-	query += " ORDER BY system_type, physical_host_id"
+	query += " ORDER BY measurement_date DESC, physical_host_id"
 	
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -58,29 +66,28 @@ func (r *PhysicalHostReport) Query(systemType string) ([]PhysicalHostRow, error)
 	var results []PhysicalHostRow
 	for rows.Next() {
 		var row PhysicalHostRow
-		var hostID sql.NullString
-		var systemType sql.NullString
+		var physicalCores sql.NullInt64
 		
 		err := rows.Scan(
-			&hostID,
-			&systemType,
-			&row.TotalCores,
+			&row.MeasurementDate,
+			&row.PhysicalHostID,
+			&row.HostIDMethod,
+			&row.HostIDConfidence,
+			&physicalCores,
 			&row.VMCount,
+			&row.VMList,
+			&row.TotalVMCores,
+			&row.LatestMeasurement,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 		
-		if hostID.Valid {
-			row.PhysicalHostID = hostID.String
+		// Handle NULL physical_cores
+		if physicalCores.Valid {
+			row.PhysicalCores = int(physicalCores.Int64)
 		} else {
-			row.PhysicalHostID = "N/A"
-		}
-		
-		if systemType.Valid {
-			row.SystemType = systemType.String
-		} else {
-			row.SystemType = "Unknown"
+			row.PhysicalCores = 0
 		}
 		
 		results = append(results, row)
@@ -95,27 +102,32 @@ func (r *PhysicalHostReport) WriteTable(w io.Writer, rows []PhysicalHostRow) err
 	defer tw.Flush()
 	
 	// Header
-	fmt.Fprintln(tw, "PHYSICAL HOST ID\tSYSTEM TYPE\tTOTAL CORES\tVM COUNT")
-	fmt.Fprintln(tw, strings.Repeat("-", 80))
+	fmt.Fprintln(tw, "DATE\tPHYS_HOST_ID\tMETHOD\tCONFIDENCE\tPHYS_CORES\tVM_COUNT\tVM_CORES")
+	fmt.Fprintln(tw, strings.Repeat("-", 100))
 	
 	// Data rows
-	totalCores := 0
+	totalPhysCores := 0
 	totalVMs := 0
+	totalVMCores := 0
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\n",
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\t%d\n",
+			row.MeasurementDate,
 			row.PhysicalHostID,
-			row.SystemType,
-			row.TotalCores,
+			row.HostIDMethod,
+			row.HostIDConfidence,
+			row.PhysicalCores,
 			row.VMCount,
+			row.TotalVMCores,
 		)
-		totalCores += row.TotalCores
+		totalPhysCores += row.PhysicalCores
 		totalVMs += row.VMCount
+		totalVMCores += row.TotalVMCores
 	}
 	
 	// Summary
 	if len(rows) > 0 {
-		fmt.Fprintln(tw, strings.Repeat("-", 80))
-		fmt.Fprintf(tw, "TOTAL (%d hosts)\t\t%d\t%d\n", len(rows), totalCores, totalVMs)
+		fmt.Fprintln(tw, strings.Repeat("-", 100))
+		fmt.Fprintf(tw, "TOTAL (%d hosts)\t\t\t\t%d\t%d\t%d\n", len(rows), totalPhysCores, totalVMs, totalVMCores)
 	}
 	
 	return nil
@@ -128,10 +140,15 @@ func (r *PhysicalHostReport) WriteCSV(w io.Writer, rows []PhysicalHostRow) error
 	
 	// Header
 	err := writer.Write([]string{
+		"measurement_date",
 		"physical_host_id",
-		"system_type",
-		"total_cores",
+		"host_id_method",
+		"host_id_confidence",
+		"physical_cores",
 		"vm_count",
+		"vm_list",
+		"total_vm_cores",
+		"latest_measurement",
 	})
 	if err != nil {
 		return err
@@ -140,10 +157,15 @@ func (r *PhysicalHostReport) WriteCSV(w io.Writer, rows []PhysicalHostRow) error
 	// Data rows
 	for _, row := range rows {
 		err := writer.Write([]string{
+			row.MeasurementDate,
 			row.PhysicalHostID,
-			row.SystemType,
-			fmt.Sprintf("%d", row.TotalCores),
+			row.HostIDMethod,
+			row.HostIDConfidence,
+			fmt.Sprintf("%d", row.PhysicalCores),
 			fmt.Sprintf("%d", row.VMCount),
+			row.VMList,
+			fmt.Sprintf("%d", row.TotalVMCores),
+			row.LatestMeasurement,
 		})
 		if err != nil {
 			return err

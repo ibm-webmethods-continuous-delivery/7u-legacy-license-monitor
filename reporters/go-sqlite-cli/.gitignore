@@ -1,7 +1,8 @@
 # Build artifacts
 target/
 bin/
-prodcontainer/seed-go-sqlite-api-static
+# Container build artifacts
+prodcontainer/iwldr-static
 prodcontainer/test-data/
 *.exe
 *.exe~
@@ -40,6 +41,14 @@ Thumbs.db
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+
+# Test databases at root level (should be in acceptance-test/ instead)
+test-*.db
+acceptance-*.db
+*-test.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Go specific
 *.test

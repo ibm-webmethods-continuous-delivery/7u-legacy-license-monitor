@@ -10,6 +10,16 @@ FIXTURES_DIR="${TEST_DIR}/fixtures"
 TEST_DATA_DIR="${TEST_DIR}/test-data"
 EXPECTED_OUTPUT_DIR="${TEST_DIR}/expected-output"
 
+# Configuration paths
+CONFIG_DIR="${FIXTURES_DIR}/config"
+CONTRACT_PRODUCTS_DIR="${CONFIG_DIR}/contract-products"
+LANDSCAPE_CONFIG_DIR="${CONFIG_DIR}/landscape"
+IBM_TERMS_DIR="${TEST_DIR}/../../config-example/ibm-terms"
+
+# Reference data files
+PRODUCT_CODES_CSV="${CONTRACT_PRODUCTS_DIR}/product-codes.csv"
+LICENSE_TERMS_CSV="${IBM_TERMS_DIR}/license-terms.csv"
+
 # Binary location - assumes build has already been run
 BINARY="${TEST_DIR}/../target/bin/iwldr-static"
 
@@ -308,8 +318,12 @@ oneTimeSetUp() {
         fail "Fixtures directory not found: ${FIXTURES_DIR}"
     fi
     
-    if [ ! -f "${FIXTURES_DIR}/product-codes.csv" ]; then
-        fail "Product codes fixture not found"
+    if [ ! -f "${PRODUCT_CODES_CSV}" ]; then
+        fail "Product codes fixture not found: ${PRODUCT_CODES_CSV}"
+    fi
+    
+    if [ ! -f "${LICENSE_TERMS_CSV}" ]; then
+        fail "License terms fixture not found: ${LICENSE_TERMS_CSV}"
     fi
     
     # Create test data directory

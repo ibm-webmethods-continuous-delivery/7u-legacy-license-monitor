@@ -6,23 +6,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"text/tabwriter"
 	"time"
 )
 
 // ComplianceRow represents a row from v_license_compliance_report
 type ComplianceRow struct {
-	ProductCode            string    `json:"product_code"`
-	ProductName            string    `json:"product_name"`
 	MeasurementDate        time.Time `json:"measurement_date"`
-	TotalCores             int       `json:"total_cores"`
-	LicensedCores          int       `json:"licensed_cores"`
-	UnlicensedCores        int       `json:"unlicensed_cores"`
-	LicenseTermID          string    `json:"license_term_id"`
-	LicensedCoreCount      int       `json:"licensed_core_count"`
-	ComplianceGap          int       `json:"compliance_gap"`
-	ComplianceStatus       string    `json:"compliance_status"`
+	ProductMnemoCode       string    `json:"product_mnemo_code"`
+	ProductName            string    `json:"product_name"`
+	Mode                   string    `json:"mode"`
+	TermID                 string    `json:"term_id"`
+	ProgramNumber          string    `json:"program_number"`
+	ProgramName            string    `json:"program_name"`
+	TotalNodes             int       `json:"total_nodes"`
+	RunningNodes           int       `json:"running_nodes"`
+	TotalInstallations     int       `json:"total_installations"`
+	TotalVMCores           int       `json:"total_vm_cores"`
+	TotalLicenseCoresRaw   int       `json:"total_license_cores_raw"`
+	EligibleCoresSum       int       `json:"eligible_cores_sum"`
+	IneligibleCoresSum     int       `json:"ineligible_cores_sum"`
+	UniquePhysicalHosts    int       `json:"unique_physical_hosts"`
+	VirtualizedNodes       int       `json:"virtualized_nodes"`
+	PhysicalNodes          int       `json:"physical_nodes"`
 }
 
 // ComplianceReport generates reports from v_license_compliance_report view
@@ -39,16 +45,23 @@ func NewComplianceReport(db *sql.DB) *ComplianceReport {
 func (r *ComplianceReport) Query(productCode string, fromDate, toDate *time.Time, nonCompliantOnly bool) ([]ComplianceRow, error) {
 	query := `
 		SELECT 
-			product_code,
-			product_name,
 			measurement_date,
-			total_cores,
-			licensed_cores,
-			unlicensed_cores,
-			COALESCE(license_term_id, 'N/A') as license_term_id,
-			COALESCE(licensed_core_count, 0) as licensed_core_count,
-			COALESCE(compliance_gap, 0) as compliance_gap,
-			COALESCE(compliance_status, 'NO_LICENSE_DATA') as compliance_status
+			product_mnemo_code,
+			product_name,
+			mode,
+			term_id,
+			program_number,
+			program_name,
+			total_nodes,
+			running_nodes,
+			total_installations,
+			total_vm_cores,
+			total_license_cores_raw,
+			eligible_cores_sum,
+			ineligible_cores_sum,
+			unique_physical_hosts,
+			virtualized_nodes,
+			physical_nodes
 		FROM v_license_compliance_report
 		WHERE 1=1
 	`
@@ -56,7 +69,7 @@ func (r *ComplianceReport) Query(productCode string, fromDate, toDate *time.Time
 	args := []interface{}{}
 	
 	if productCode != "" {
-		query += " AND product_code = ?"
+		query += " AND product_mnemo_code = ?"
 		args = append(args, productCode)
 	}
 	
@@ -70,11 +83,9 @@ func (r *ComplianceReport) Query(productCode string, fromDate, toDate *time.Time
 		args = append(args, toDate.Format("2006-01-02"))
 	}
 	
-	if nonCompliantOnly {
-		query += " AND compliance_status != 'COMPLIANT'"
-	}
+	// Note: nonCompliantOnly filter removed as view doesn't have compliance_status
 	
-	query += " ORDER BY compliance_status DESC, product_code, measurement_date DESC"
+	query += " ORDER BY measurement_date DESC, product_mnemo_code"
 	
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -88,16 +99,23 @@ func (r *ComplianceReport) Query(productCode string, fromDate, toDate *time.Time
 		var dateStr string
 		
 		err := rows.Scan(
-			&row.ProductCode,
-			&row.ProductName,
 			&dateStr,
-			&row.TotalCores,
-			&row.LicensedCores,
-			&row.UnlicensedCores,
-			&row.LicenseTermID,
-			&row.LicensedCoreCount,
-			&row.ComplianceGap,
-			&row.ComplianceStatus,
+			&row.ProductMnemoCode,
+			&row.ProductName,
+			&row.Mode,
+			&row.TermID,
+			&row.ProgramNumber,
+			&row.ProgramName,
+			&row.TotalNodes,
+			&row.RunningNodes,
+			&row.TotalInstallations,
+			&row.TotalVMCores,
+			&row.TotalLicenseCoresRaw,
+			&row.EligibleCoresSum,
+			&row.IneligibleCoresSum,
+			&row.UniquePhysicalHosts,
+			&row.VirtualizedNodes,
+			&row.PhysicalNodes,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
@@ -121,80 +139,40 @@ func (r *ComplianceReport) WriteTable(w io.Writer, rows []ComplianceRow) error {
 	defer tw.Flush()
 	
 	// Header
-	fmt.Fprintln(tw, "PRODUCT CODE\tPRODUCT NAME\tDATE\tLICENSED\tUNLICENSED\tLICENSE LIMIT\tGAP\tSTATUS")
-	fmt.Fprintln(tw, strings.Repeat("-", 120))
+	fmt.Fprintln(tw, "DATE\tPRODUCT\tMODE\tPROGRAM\tNODES\tRUN\tINST\tVM_CORES\tELIG\tINELIG")
+	fmt.Fprintln(tw, "----\t-------\t----\t-------\t-----\t---\t----\t--------\t----\t------")
 	
-	// Data rows - group by status
-	var compliant, nonCompliant, noLicense []ComplianceRow
+	// Data rows
 	for _, row := range rows {
-		switch row.ComplianceStatus {
-		case "COMPLIANT":
-			compliant = append(compliant, row)
-		case "NON_COMPLIANT":
-			nonCompliant = append(nonCompliant, row)
-		default:
-			noLicense = append(noLicense, row)
-		}
-	}
-	
-	// Show non-compliant first (most important)
-	if len(nonCompliant) > 0 {
-		fmt.Fprintln(tw, "⚠️  NON-COMPLIANT:")
-		for _, row := range nonCompliant {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t❌ %s\n",
-				row.ProductCode,
-				row.ProductName,
-				row.MeasurementDate.Format("2006-01-02"),
-				row.LicensedCores,
-				row.UnlicensedCores,
-				row.LicensedCoreCount,
-				row.ComplianceGap,
-				row.ComplianceStatus,
-			)
-		}
-		fmt.Fprintln(tw, "")
-	}
-	
-	// Show no license data next
-	if len(noLicense) > 0 {
-		fmt.Fprintln(tw, "ℹ️  NO LICENSE DATA:")
-		for _, row := range noLicense {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t⚠️  %s\n",
-				row.ProductCode,
-				row.ProductName,
-				row.MeasurementDate.Format("2006-01-02"),
-				row.LicensedCores,
-				row.UnlicensedCores,
-				row.LicensedCoreCount,
-				row.ComplianceGap,
-				row.ComplianceStatus,
-			)
-		}
-		fmt.Fprintln(tw, "")
-	}
-	
-	// Show compliant last
-	if len(compliant) > 0 {
-		fmt.Fprintln(tw, "✅ COMPLIANT:")
-		for _, row := range compliant {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%d\t%d\t✓ %s\n",
-				row.ProductCode,
-				row.ProductName,
-				row.MeasurementDate.Format("2006-01-02"),
-				row.LicensedCores,
-				row.UnlicensedCores,
-				row.LicensedCoreCount,
-				row.ComplianceGap,
-				row.ComplianceStatus,
-			)
-		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n",
+			row.MeasurementDate.Format("2006-01-02"),
+			row.ProductMnemoCode,
+			row.Mode,
+			row.ProgramNumber,
+			row.TotalNodes,
+			row.RunningNodes,
+			row.TotalInstallations,
+			row.TotalVMCores,
+			row.EligibleCoresSum,
+			row.IneligibleCoresSum,
+		)
 	}
 	
 	// Summary
 	if len(rows) > 0 {
-		fmt.Fprintln(tw, strings.Repeat("-", 120))
-		fmt.Fprintf(tw, "SUMMARY: %d compliant, %d non-compliant, %d no license data\n", 
-			len(compliant), len(nonCompliant), len(noLicense))
+		totalNodes := 0
+		totalVM := 0
+		totalElig := 0
+		totalInelig := 0
+		for _, row := range rows {
+			totalNodes += row.TotalNodes
+			totalVM += row.TotalVMCores
+			totalElig += row.EligibleCoresSum
+			totalInelig += row.IneligibleCoresSum
+		}
+		
+		fmt.Fprintln(tw, "----\t-------\t----\t-------\t-----\t---\t----\t--------\t----\t------")
+		fmt.Fprintf(tw, "TOTAL\t\t\t\t%d\t\t\t%d\t%d\t%d\n", totalNodes, totalVM, totalElig, totalInelig)
 	}
 	
 	return nil
@@ -207,16 +185,23 @@ func (r *ComplianceReport) WriteCSV(w io.Writer, rows []ComplianceRow) error {
 	
 	// Header
 	err := writer.Write([]string{
-		"product_code",
-		"product_name",
 		"measurement_date",
-		"total_cores",
-		"licensed_cores",
-		"unlicensed_cores",
-		"license_term_id",
-		"licensed_core_count",
-		"compliance_gap",
-		"compliance_status",
+		"product_mnemo_code",
+		"product_name",
+		"mode",
+		"term_id",
+		"program_number",
+		"program_name",
+		"total_nodes",
+		"running_nodes",
+		"total_installations",
+		"total_vm_cores",
+		"total_license_cores_raw",
+		"eligible_cores_sum",
+		"ineligible_cores_sum",
+		"unique_physical_hosts",
+		"virtualized_nodes",
+		"physical_nodes",
 	})
 	if err != nil {
 		return err
@@ -225,16 +210,23 @@ func (r *ComplianceReport) WriteCSV(w io.Writer, rows []ComplianceRow) error {
 	// Data rows
 	for _, row := range rows {
 		err := writer.Write([]string{
-			row.ProductCode,
-			row.ProductName,
 			row.MeasurementDate.Format("2006-01-02"),
-			fmt.Sprintf("%d", row.TotalCores),
-			fmt.Sprintf("%d", row.LicensedCores),
-			fmt.Sprintf("%d", row.UnlicensedCores),
-			row.LicenseTermID,
-			fmt.Sprintf("%d", row.LicensedCoreCount),
-			fmt.Sprintf("%d", row.ComplianceGap),
-			row.ComplianceStatus,
+			row.ProductMnemoCode,
+			row.ProductName,
+			row.Mode,
+			row.TermID,
+			row.ProgramNumber,
+			row.ProgramName,
+			fmt.Sprintf("%d", row.TotalNodes),
+			fmt.Sprintf("%d", row.RunningNodes),
+			fmt.Sprintf("%d", row.TotalInstallations),
+			fmt.Sprintf("%d", row.TotalVMCores),
+			fmt.Sprintf("%d", row.TotalLicenseCoresRaw),
+			fmt.Sprintf("%d", row.EligibleCoresSum),
+			fmt.Sprintf("%d", row.IneligibleCoresSum),
+			fmt.Sprintf("%d", row.UniquePhysicalHosts),
+			fmt.Sprintf("%d", row.VirtualizedNodes),
+			fmt.Sprintf("%d", row.PhysicalNodes),
 		})
 		if err != nil {
 			return err

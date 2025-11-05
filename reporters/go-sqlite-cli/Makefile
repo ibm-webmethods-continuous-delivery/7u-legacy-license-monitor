@@ -5,7 +5,7 @@ CMD_DIR=cmd/iwldr
 DATA_DIR=data
 ACCEPTANCE_TEST_DIR=acceptance-test
 ACCEPTANCE_DB=$(ACCEPTANCE_TEST_DIR)/acceptance-test.db
-REFERENCE_DATA_DIR=../../inspectors/default/detection-config
+REFERENCE_DATA_DIR=../../config-example
 FIXTURES_DIR=$(ACCEPTANCE_TEST_DIR)/fixtures
 
 # Go variables
@@ -140,7 +140,8 @@ acceptance-test-load: build
 	./$(BUILD_DIR)/$(BINARY_NAME) import \
 		--db-path $(ACCEPTANCE_DB) \
 		--load-reference \
-		--reference-dir $(REFERENCE_DATA_DIR) \
+		--product-codes $(ACCEPTANCE_TEST_DIR)/fixtures/config/contract-products/product-codes.csv \
+		--license-terms $(REFERENCE_DATA_DIR)/ibm-terms/license-terms.csv \
 		--dir $(FIXTURES_DIR)
 	@echo "Test data loaded"
 
@@ -177,6 +178,28 @@ acceptance-test-verify:
 	@echo ""
 	@echo "Import Statistics:"
 	@sqlite3 -header -column $(ACCEPTANCE_DB) "SELECT COUNT(*) as total_imports, SUM(records_created) as total_records, COUNT(CASE WHEN status = 'success' THEN 1 END) as successful FROM import_sessions"
+	@echo ""
+	@echo "========================================="
+	@echo "Testing All Report Commands"
+	@echo "========================================="
+	@echo ""
+	@echo "1. Compliance Report (first 5 rows):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report compliance --db-path $(ACCEPTANCE_DB) --format table | head -7
+	@echo ""
+	@echo "2. Cores Report (first 5 rows):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report cores --db-path $(ACCEPTANCE_DB) --format table | head -7
+	@echo ""
+	@echo "3. Daily Summary Report (first 5 rows):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report daily --db-path $(ACCEPTANCE_DB) --format table | head -7
+	@echo ""
+	@echo "4. Daily Summary by Product (first 5 rows):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report daily-summary --db-path $(ACCEPTANCE_DB) --format table | head -7
+	@echo ""
+	@echo "5. Host Detail Report (first 5 rows):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report host-detail --db-path $(ACCEPTANCE_DB) --format table | head -7
+	@echo ""
+	@echo "6. Hosts Report (first 5 rows):"
+	@./$(BUILD_DIR)/$(BINARY_NAME) report hosts --db-path $(ACCEPTANCE_DB) --format table | head -7
 	@echo ""
 	@echo "========================================="
 	@echo "Verification Complete"

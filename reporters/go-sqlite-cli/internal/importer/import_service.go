@@ -49,6 +49,12 @@ func (s *ImportService) ImportCSVFile(filePath string) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to parse CSV: %w", err)
 	}
 
+	// Check if detection was successful
+	if record.IsDetectionError() {
+		// Return error for failed detection - don't import incomplete data
+		return nil, fmt.Errorf("inspector detection failed for %s: %s", record.Hostname, record.GetDetectionError())
+	}
+
 	// Start transaction
 	tx, err := s.db.Begin()
 	if err != nil {

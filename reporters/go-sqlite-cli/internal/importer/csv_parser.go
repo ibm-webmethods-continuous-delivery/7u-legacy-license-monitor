@@ -30,6 +30,8 @@ type CSVRecord struct {
 	Hostname           string
 	Timestamp          time.Time
 	SourceFile         string
+	DetectionResult    string // SUCCESS, ERROR, or empty
+	ErrorMessage       string // Error message if detection failed
 	SystemFields       map[string]string
 	ProductDetections  map[string]*ProductDetection
 }
@@ -99,29 +101,57 @@ func ParseCSVFile(filePath string) (*CSVRecord, error) {
 		parameter := strings.TrimSpace(row[0])
 		value := strings.TrimSpace(row[1])
 
+		// Normalize parameter name to uppercase for consistent handling
+		parameterUpper := strings.ToUpper(parameter)
+
 		// Check if this is a product field
-		if isProductField(parameter) {
-			if err := parseProductField(record, parameter, value); err != nil {
+		if isProductField(parameterUpper) {
+			if err := parseProductField(record, parameterUpper, value); err != nil {
 				return nil, fmt.Errorf("failed to parse product field %s: %w", parameter, err)
 			}
 		} else {
-			// System field
+			// Store both original and uppercase versions for compatibility
 			record.SystemFields[parameter] = value
+			if parameterUpper != parameter {
+				record.SystemFields[parameterUpper] = value
+			}
 
-			// Parse timestamp if this is the detection_timestamp field
-			if parameter == "detection_timestamp" {
+			// Parse timestamp if this is the detection_timestamp field (case-insensitive)
+			if parameterUpper == "DETECTION_TIMESTAMP" {
 				ts, err := time.Parse(time.RFC3339, value)
 				if err != nil {
 					return nil, fmt.Errorf("failed to parse detection_timestamp: %w", err)
 				}
 				record.Timestamp = ts
 			}
+
+			// Override hostname from CSV if provided
+			if parameterUpper == "HOSTNAME" && value != "" {
+				record.Hostname = value
+			}
+
+			// Capture detection result status
+			if parameterUpper == "DETECTION_RESULT" {
+				record.DetectionResult = value
+			}
+
+			// Capture error message if present
+			if parameterUpper == "ERROR_MESSAGE" {
+				record.ErrorMessage = value
+			}
 		}
 	}
 
 	// Validate required fields
 	if record.Timestamp.IsZero() {
-		return nil, fmt.Errorf("missing required field: detection_timestamp")
+		return nil, fmt.Errorf("missing required field: DETECTION_TIMESTAMP")
+	}
+
+	// Check for failed detection
+	if record.DetectionResult == "ERROR" {
+		// Return record with error information for logging
+		// The importer can decide whether to skip or log these
+		return record, nil
 	}
 
 	return record, nil
@@ -146,11 +176,13 @@ func extractHostnameFromFilename(filePath string) (string, error) {
 }
 
 // isProductField checks if a parameter name is a product-related field
+// Note: This function expects uppercase parameter names
 func isProductField(parameter string) bool {
 	// Product fields follow patterns like:
 	// IS_ONP_PRD, IS_ONP_PRD_IBM_PRODUCT_CODE, IS_ONP_PRD_INSTALL_STATUS, etc.
 	// IS_ONP_NPR, IS_ONP_NPR_IBM_PRODUCT_CODE, IS_ONP_NPR_RUNNING_STATUS, etc.
 	// BRK_ONP_PRD, BRK_ONP_NPR, UM_ONP_PRD, etc.
+	// Also supports numbered fields: IS_ONP_PRD_INSTALL_PATH_01, IS_ONP_NPR_RUNNING_COMMANDLINES_02, etc.
 	
 	// Check if it contains product code pattern (ends with _PRD, _NPR, or _NONPROD)
 	return strings.Contains(parameter, "_PRD") || 
@@ -159,6 +191,7 @@ func isProductField(parameter string) bool {
 }
 
 // parseProductField parses a product-related field and updates the record
+// Note: This function expects uppercase parameter names
 func parseProductField(record *CSVRecord, parameter, value string) error {
 	// Split parameter to extract product code and field type
 	// Examples:
@@ -166,6 +199,8 @@ func parseProductField(record *CSVRecord, parameter, value string) error {
 	// IS_ONP_NPR -> product code: IS_ONP_NPR, field: (status)
 	// IS_ONP_PRD_IBM_PRODUCT_CODE -> product code: IS_ONP_PRD, field: IBM_PRODUCT_CODE
 	// IS_ONP_NPR_RUNNING_STATUS -> product code: IS_ONP_NPR, field: RUNNING_STATUS
+	// IS_ONP_NPR_INSTALL_PATH_01 -> product code: IS_ONP_NPR, field: INSTALL_PATH (numbered)
+	// IS_ONP_NPR_RUNNING_COMMANDLINES_02 -> product code: IS_ONP_NPR, field: RUNNING_COMMANDLINES (numbered)
 	
 	parts := strings.Split(parameter, "_")
 	if len(parts) < 3 {
@@ -175,12 +210,24 @@ func parseProductField(record *CSVRecord, parameter, value string) error {
 	// Find the product code (everything up to and including _PRD, _NPR, or _NONPROD)
 	var productCode string
 	var fieldType string
+	var fieldNumber string
 	
 	for i, part := range parts {
 		if part == "PRD" || part == "NPR" || part == "NONPROD" {
 			productCode = strings.Join(parts[:i+1], "_")
 			if i+1 < len(parts) {
-				fieldType = strings.Join(parts[i+1:], "_")
+				remainingParts := parts[i+1:]
+				
+				// Check if the last part is a number (e.g., _01, _02)
+				lastPart := remainingParts[len(remainingParts)-1]
+				if matched, _ := regexp.MatchString(`^\d+$`, lastPart); matched {
+					fieldNumber = lastPart
+					if len(remainingParts) > 1 {
+						fieldType = strings.Join(remainingParts[:len(remainingParts)-1], "_")
+					}
+				} else {
+					fieldType = strings.Join(remainingParts, "_")
+				}
 			}
 			break
 		}
@@ -213,8 +260,18 @@ func parseProductField(record *CSVRecord, parameter, value string) error {
 		var count int
 		fmt.Sscanf(value, "%d", &count)
 		detection.RunningCount = count
-	case "RUNNING_COMMANDLINES":
-		detection.RunningCommandlines = value
+	case "RUNNING_COMMANDLINES", "RUNNING_COMMANDLINE":
+		// Handle both old format (single field) and new format (numbered fields)
+		if fieldNumber != "" {
+			// New numbered format: append with newline separator
+			if detection.RunningCommandlines != "" {
+				detection.RunningCommandlines += "\n"
+			}
+			detection.RunningCommandlines += value
+		} else {
+			// Old format: single field with all commandlines
+			detection.RunningCommandlines = value
+		}
 	case "INSTALL_STATUS":
 		detection.InstallStatus = value
 	case "INSTALL_COUNT":
@@ -223,24 +280,62 @@ func parseProductField(record *CSVRecord, parameter, value string) error {
 		fmt.Sscanf(value, "%d", &count)
 		detection.InstallCount = count
 	case "INSTALL_PATHS":
-		// Parse semicolon-separated paths
+		// Old format: semicolon-separated paths in single field
 		if value != "" {
 			detection.InstallPaths = strings.Split(value, ";")
+		}
+	case "INSTALL_PATH":
+		// New numbered format: individual path fields
+		if value != "" {
+			detection.InstallPaths = append(detection.InstallPaths, value)
 		}
 	}
 
 	return nil
 }
 
-// GetSystemField retrieves a system field value
+// GetSystemField retrieves a system field value (case-insensitive)
 func (r *CSVRecord) GetSystemField(name string) string {
-	return r.SystemFields[name]
+	// Try exact match first
+	if val, exists := r.SystemFields[name]; exists {
+		return val
+	}
+	// Try uppercase match
+	if val, exists := r.SystemFields[strings.ToUpper(name)]; exists {
+		return val
+	}
+	return ""
 }
 
-// GetSystemFieldWithDefault retrieves a system field with a default value
+// GetSystemFieldWithDefault retrieves a system field with a default value (case-insensitive)
 func (r *CSVRecord) GetSystemFieldWithDefault(name, defaultValue string) string {
-	if val, exists := r.SystemFields[name]; exists && val != "" {
+	if val := r.GetSystemField(name); val != "" {
 		return val
 	}
 	return defaultValue
+}
+
+// IsDetectionSuccess returns true if the detection was successful
+func (r *CSVRecord) IsDetectionSuccess() bool {
+	// If DETECTION_RESULT is not present, assume success (backward compatibility)
+	if r.DetectionResult == "" {
+		return true
+	}
+	return r.DetectionResult == "SUCCESS"
+}
+
+// IsDetectionError returns true if the detection failed
+func (r *CSVRecord) IsDetectionError() bool {
+	return r.DetectionResult == "ERROR"
+}
+
+// GetDetectionError returns the error message if detection failed
+func (r *CSVRecord) GetDetectionError() string {
+	if r.IsDetectionError() {
+		if r.ErrorMessage != "" {
+			return r.ErrorMessage
+		}
+		return "Detection failed (no error message provided)"
+	}
+	return ""
 }
