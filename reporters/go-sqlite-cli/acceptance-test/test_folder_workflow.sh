@@ -115,8 +115,8 @@ test_import_with_folder_workflow() {
 test_files_moved_to_processed() {
     log_info "Test 5: Verifying files moved to processed folder..."
     
-    INPUT_COUNT=$(ls -1 "${INPUT_DIR}"/*.csv 2>/dev/null | wc -l || echo "0")
-    PROCESSED_COUNT=$(ls -1 "${PROCESSED_DIR}"/*.csv 2>/dev/null | wc -l || echo "0")
+    INPUT_COUNT=$(ls -1 "${INPUT_DIR}"/*.csv 2>/dev/null | wc -l)
+    PROCESSED_COUNT=$(ls -1 "${PROCESSED_DIR}"/*.csv 2>/dev/null | wc -l)
     
     if [ "${INPUT_COUNT}" -ne 0 ]; then
         log_error "Expected 0 files in input folder, found ${INPUT_COUNT}"
