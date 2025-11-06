@@ -131,7 +131,8 @@ test_database_init() {
 test_import_csv() {
     run_test "Import all inspector CSV files"
     
-    FIXTURE_COUNT=$(find "$FIXTURES_DIR" -name "*.csv" -type f | wc -l | tr -d ' ')
+    # Count only inspector CSV files (exclude config directory)
+    FIXTURE_COUNT=$(find "$FIXTURES_DIR" -maxdepth 1 -name "*.csv" -type f | wc -l | tr -d ' ')
     print_info "Importing $FIXTURE_COUNT CSV files..."
     
     if "$BINARY" import --db-path "$TEST_DB" --dir "$FIXTURES_DIR" \
@@ -338,7 +339,8 @@ main() {
         exit 1
     fi
     
-    FIXTURE_COUNT=$(find "$FIXTURES_DIR" -name "*.csv" -type f | wc -l | tr -d ' ')
+    # Count only inspector CSV files (exclude config directory)
+    FIXTURE_COUNT=$(find "$FIXTURES_DIR" -maxdepth 1 -name "*.csv" -type f | wc -l | tr -d ' ')
     print_info "Found $FIXTURE_COUNT fixture files"
     
     # Run tests
