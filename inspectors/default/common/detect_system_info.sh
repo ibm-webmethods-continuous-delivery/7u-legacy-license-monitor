@@ -92,7 +92,7 @@ logE() {
   __log_time=$(date -u '+%H:%M:%S')
   echo "${__log_time}[ERR] $1" >&2
   if [ -n "$iwdli_session_log" ]; then
-      echo "${__log_time}[ERR] $1" >> "$iwdli_session_log"
+    echo "${__log_time}[ERR] $1" >> "$iwdli_session_log"
   fi
   unset __log_time
 }
@@ -1640,12 +1640,12 @@ write_error_csv() {
     echo "ERROR_MESSAGE,${error_message}"
   } > "$output_file"
   
-  logI "Error CSV written to: $output_file"
+  log "Error CSV written to: $output_file"
 }
 
 # Function to validate configuration before running detection
 validate_configuration() {
-  logI "Validating configuration..."
+  log "Validating configuration..."
 
   local validation_errors=""
   local error_count=0
@@ -1749,7 +1749,7 @@ validate_configuration() {
     return 1
   fi
     
-  logI "Configuration validation successful"
+  log "Configuration validation successful"
   return 0
 }
 
@@ -2262,14 +2262,15 @@ main() {
     fi
   fi
   
+  # Create audit directory for this session (debug output, logs)
+  mkdir -p "${iwdli_session_audit_dir}" || {
+    echo "Error: Cannot create session audit directory: ${iwdli_session_audit_dir}" >&2
+    exit 1
+  }
+
   # Log all session information in debug mode
   log_session_info
 
-  # Create audit directory for this session (debug output, logs)
-  mkdir -p "${iwdli_session_audit_dir}" || {
-      echo "Error: Cannot create session audit directory: ${iwdli_session_audit_dir}" >&2
-      exit 1
-  }
   
   # Create data directory if it doesn't exist
   mkdir -p "${IWDLI_DATA_DIR}" || {

@@ -39,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "Installing files..."
 cp -r "$SCRIPT_DIR/common" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/config-example" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/test*.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR"/test*.sh "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
 
 # Copy license if exists
@@ -49,7 +49,7 @@ fi
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR/common/detect_system_info.sh"
-chmod +x "$INSTALL_DIR/test*.sh"
+chmod +x "$INSTALL_DIR"/*.sh
 
 echo ""
 echo "Installation completed successfully!"
