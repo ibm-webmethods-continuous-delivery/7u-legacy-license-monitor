@@ -40,6 +40,8 @@ The test verifies that **i23** and **i45** are correctly identified as VMs runni
 - The iwldr package extracted to a directory
 - Write permissions in the acceptance-test directory
 
+**Note:** This test does **NOT** require the `sqlite3` CLI tool to be installed. All database validation is performed using the `iwldr` binary's built-in report commands.
+
 ## Running the Test
 
 ### Quick Start
