@@ -229,7 +229,7 @@ test_physical_host_deduplication() {
     fi
 }
 
-# Test 8: Generate report
+# Test 8: Generate daily summary report
 test_generate_report() {
     run_test "Generate daily summary report"
     
@@ -238,8 +238,9 @@ test_generate_report() {
     if "$BINARY" report daily-summary --db-path "$TEST_DB" > "$REPORT_OUTPUT" 2>&1; then
         if [ -s "$REPORT_OUTPUT" ]; then
             print_pass "Daily summary report generated successfully"
-            print_info "Report preview (first 10 lines):"
-            head -10 "$REPORT_OUTPUT" | sed 's/^/    /'
+            echo ""
+            cat "$REPORT_OUTPUT"
+            echo ""
         else
             print_fail "Report output is empty"
             return 1
@@ -260,6 +261,9 @@ test_hosts_report() {
         if [ -s "$REPORT_OUTPUT" ]; then
             REPORT_LINES=$(wc -l < "$REPORT_OUTPUT" | tr -d ' ')
             print_pass "Hosts report generated ($REPORT_LINES lines)"
+            echo ""
+            cat "$REPORT_OUTPUT"
+            echo ""
         else
             print_fail "Hosts report is empty"
             return 1
@@ -277,7 +281,14 @@ test_compliance_report() {
     REPORT_OUTPUT="$TEST_DATA_DIR/report-compliance.txt"
     
     if "$BINARY" report compliance --db-path "$TEST_DB" > "$REPORT_OUTPUT" 2>&1; then
-        print_pass "Compliance report generated successfully"
+        if [ -s "$REPORT_OUTPUT" ]; then
+            print_pass "Compliance report generated successfully"
+            echo ""
+            cat "$REPORT_OUTPUT"
+            echo ""
+        else
+            print_pass "Compliance report command executed (no data available)"
+        fi
     else
         # Compliance report may have no data without reference data loaded
         print_pass "Compliance report command executed (may be empty without reference data)"
@@ -369,6 +380,31 @@ main() {
         echo ""
         print_info "The iwldr binary is working correctly on this system."
         print_info "You can now proceed with production deployment."
+        echo ""
+        print_separator
+        echo "Next Steps for Production Deployment"
+        print_separator
+        echo ""
+        echo "1. Initialize production database:"
+        echo "   cd /path/to/iwldr"
+        echo "   ./bin/iwldr init --db-path /prod/data/iwldr.db"
+        echo ""
+        echo "2. Load reference data (license terms and product codes):"
+        echo "   ./bin/iwldr import --db-path /prod/data/iwldr.db \\"
+        echo "       --load-reference --reference-dir /prod/config \\"
+        echo "       --file /dev/null"
+        echo ""
+        echo "3. Import inspector data from your landscape:"
+        echo "   ./bin/iwldr import --db-path /prod/data/iwldr.db \\"
+        echo "       --dir /prod/data/inspector-output"
+        echo ""
+        echo "4. Generate reports:"
+        echo "   ./bin/iwldr report compliance --db-path /prod/data/iwldr.db"
+        echo "   ./bin/iwldr report daily-summary --db-path /prod/data/iwldr.db"
+        echo "   ./bin/iwldr report hosts --db-path /prod/data/iwldr.db"
+        echo "   ./bin/iwldr report peak --db-path /prod/data/iwldr.db"
+        echo ""
+        echo "For detailed deployment instructions, see: DEPLOY_ON_AIX.md"
         echo ""
         exit 0
     else
