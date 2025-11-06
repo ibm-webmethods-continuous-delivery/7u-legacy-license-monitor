@@ -71,10 +71,30 @@ DETECT_INSTALL_STATUS=""
 DETECT_INSTALL_COUNT=""
 DETECT_INSTALL_PATHS=""
 
-# Function to write a parameter-value pair to CSV
+# Function to write a parameter-value pair to CSV with proper escaping
+# According to RFC 4180, fields containing line breaks, quotes, or commas must be quoted
 write_csv() {
-  echo "$1,$2" >> "$iwdli_output_file"
-  logD "CSV: $1=$2"
+  local param="$1"
+  local value="$2"
+  
+  # Check if value needs quoting (contains comma, double-quote, or actual newline)
+  # We check for actual newlines by looking for line breaks in the value
+  case "$value" in
+    *,*|*\"*|*"
+"*)
+      # Value contains comma, quote, or newline - needs quoting
+      # First, escape any existing double quotes by doubling them
+      value=$(echo "$value" | sed 's/"/""/g')
+      # Then quote the entire value
+      echo "$param,\"$value\"" >> "$iwdli_output_file"
+      logD "CSV: $param=\"...\" (quoted)"
+      ;;
+    *)
+      # Simple case - no special characters
+      echo "$param,$value" >> "$iwdli_output_file"
+      logD "CSV: $param=$value"
+      ;;
+  esac
 }
 
 # Function to log important information
