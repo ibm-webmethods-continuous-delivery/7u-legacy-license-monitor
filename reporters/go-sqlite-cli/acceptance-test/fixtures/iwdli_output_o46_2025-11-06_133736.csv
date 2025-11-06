@@ -1,0 +1,60 @@
+Parameter,Value
+DETECTION_TIMESTAMP,2025-11-06T13:37:36Z
+SESSION_AUDIT_DIRECTORY,/tmp/someuser/iwdli/audit/2025-11-06_133736
+LANDSCAPE_CONFIG_DIR,/tmp/someuser/vf-gitops/config/landscapes/EAI/NON-PROD/PREPROD
+HOSTNAME,o46
+NODE_FQDN,o46.omnitel.it
+NODE_TYPE,NON_PROD
+ENVIRONMENT,PREPROD
+INSPECTION_LEVEL,FULL
+OS_NAME,Solaris
+OS_VERSION,8
+CPU_COUNT,      16
+IS_VIRTUALIZED,no
+VIRT_TYPE,none
+PROCESSOR_VENDOR,Oracle
+PROCESSOR_BRAND,SPARC M7
+HOST_PHYSICAL_CPUS,unknown
+PARTITION_CPUS,unknown
+PHYSICAL_HOST_ID,o46
+HOST_ID_METHOD,physical-hostname
+HOST_ID_CONFIDENCE,high
+PROCESSOR_ELIGIBLE,true
+OS_ELIGIBLE,true
+VIRT_ELIGIBLE,false
+CONSIDERED_CPUS,      16
+IS_ONP_NPR,present
+IS_ONP_NPR_IBM_PRODUCT_CODE,D0YZ2ZX
+IS_ONP_NPR_RUNNING_STATUS,not-running
+IS_ONP_NPR_RUNNING_COUNT,0
+IS_ONP_NPR_INSTALL_STATUS,installed
+IS_ONP_NPR_INSTALL_COUNT,      21
+IS_ONP_NPR_INSTALL_PATH_01,/app/webmethods/IS14/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_02,/app/webmethods/IS13/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_03,/app/webmethods/IS05MdC/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_04,/app/webmethods/IS04/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_05,/app/webmethods/IS03/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_06,/app/webmethods/IS10/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_07,/app/webmethods/IS12/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_08,/app/webmethods/IS01CCM/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_09,/app/webmethods/IS01/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_10,/app/webmethods/ISCP/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_11,/app/webmethods/IS06/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_12,/app/webmethods/IS15/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_13,/app/webmethods/IS11/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_14,/app/webmethods/IS05Mnp/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_15,/app/webmethods/IS02/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_16,/app/webmethods/IS08/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_17,/app/webmethods/IS02Picasso/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_18,/app/webmethods/IS30/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_19,/app/webmethods/IS05/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_20,/app/webmethods/IS/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_21,/app/webmethods/IS16/IntegrationServer
+BRK_ONP_NPR,present
+BRK_ONP_NPR_IBM_PRODUCT_CODE,D0YY1ZX
+BRK_ONP_NPR_RUNNING_STATUS,running
+BRK_ONP_NPR_RUNNING_COUNT,1
+BRK_ONP_NPR_INSTALL_STATUS,installed
+BRK_ONP_NPR_INSTALL_COUNT,       1
+BRK_ONP_NPR_INSTALL_PATH_01,/app/webmethods/Broker
+DETECTION_RESULT,SUCCESS

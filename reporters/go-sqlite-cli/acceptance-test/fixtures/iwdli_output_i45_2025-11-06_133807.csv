@@ -1,0 +1,54 @@
+Parameter,Value
+DETECTION_TIMESTAMP,2025-11-06T13:38:07Z
+SESSION_AUDIT_DIRECTORY,/tmp/someuser/iwdli/audit/2025-11-06_133807
+LANDSCAPE_CONFIG_DIR,/tmp/someuser/vf-gitops/config/landscapes/EAI/NON-PROD/PREPROD
+HOSTNAME,i45
+NODE_FQDN,i45.some.company.com
+NODE_TYPE,NON_PROD
+ENVIRONMENT,PREPROD
+INSPECTION_LEVEL,FULL
+OS_NAME,AIX
+OS_VERSION,6.100
+CPU_COUNT,1
+IS_VIRTUALIZED,yes
+VIRT_TYPE,PowerVM - Micro-Partitioning
+PROCESSOR_VENDOR,IBM
+PROCESSOR_BRAND,POWER8
+HOST_PHYSICAL_CPUS,48
+PARTITION_CPUS,48
+PHYSICAL_HOST_ID,aix-machine-00FAF2264C00
+HOST_ID_METHOD,uname-machine
+HOST_ID_CONFIDENCE,high
+PROCESSOR_ELIGIBLE,true
+OS_ELIGIBLE,false
+VIRT_ELIGIBLE,false
+CONSIDERED_CPUS,48
+IS_ONP_NPR,present
+IS_ONP_NPR_IBM_PRODUCT_CODE,D0YZ2ZX
+IS_ONP_NPR_RUNNING_STATUS,running
+IS_ONP_NPR_RUNNING_COUNT,7
+IS_ONP_NPR_RUNNING_COMMANDLINES_01,12715:54 /app/webmethods/ISFE58/jvm/jvm/bin/java -Dosgi.install.area=/app/webmethods/ISFE58/profiles/IS_default -Declipse.ignoreApp=true -Dosgi.noShutdown=true -XX:MaxPermSize=256M -Xbootclasspath/a:/app/webmethods/ISFE58/common/runtime/agent/repository/plugins/com.softwareag.platform.jaas.proxy_9.7.0.0000-0400.jar -Djava.io.tmpdir=/app/webmethods/ISFE58/profiles/IS_default/workspace/temp -server -Dorg.apache.xml.dtm.DTMManager=org.apache.xml.dtm.ref.DTMManagerDefault -Djavax.xml.xpath.XPathFactory:http://java.sun.com/jaxp/xpath/dom=com.sun.org.apache.xpath.internal.jaxp.XPathFactoryImpl -Dcom.webmethods.sc.auditing.Use80TableFormat=true -Dsun.lang.ClassLoader.allowArraySyntax=true -DWM_HOME=/app/webmethods/ISFE58 -Dwatt.server.prepend.classes=/app/webmethods/ISFE58/common/lib/wm-converters.jar -Dwatt.server.append.classes= -Xbootclasspath/p:/app/webmethods/ISFE58/IntegrationServer/instances/../../common/lib/ext/serializer.jar:/app/webmethods/ISFE58/IntegrationServer/instances/../../common/lib/ext/xalan.jar:/app/webmethods/ISFE58/IntegrationServer/instances/../../common/lib/ext/xercesImpl.jar:/app/webmethods/ISFE58/IntegrationServer/instances/../../common/lib/ext/xml-apis.jar -Xms256m -Xmx1024m -Djava.library.path=/app/webmethods/ISFE58/common/lib/tw-3.5.25:/app/webmethods/ISFE58/common/lib:/app/webmethods/ISFE58/common/security/ssx/lib:/app/webmethods/ISFE58/IntegrationServer/instances/default/lib -classpath /app/webmethods/ISFE58/common/lib/tw-3.5.25/wrapper.jar:/app/webmethods/ISFE58/common/runtime/agent/repository/plugins/com.softwareag.platform.bootstrap_9.7.0.0000-0400.jar:/app/webmethods/ISFE58/common/runtime/agent/repository/plugins/org.eclipse.equinox.launcher_1.3.0.0000-0005.jar -Dwrapper.key=RwBswUvEleLP0OUxiVgzKKfbFwZHVjRV -Dwrapper.port=32000 -Dwrapper.jvm.port.min=31000 -Dwrapper.jvm.port.max=31999 -Dwrapper.disable_console_input=TRUE -Dwrapper.pid=7733310 -Dwrapper.version=3.5.25-st -Dwrapper.native_library=wrapper -Dwrapper.arch=ppc -Dwrapper.ignore_signals=TRUE -Dwrapper.service=TRUE -Dwrapper.cpu.timeout=10 -Dwrapper.jvmid=2 -Dwrapper.lang.domain=wrapper -Dwrapper.lang.folder=../lang org.tanukisoftware.wrapper.WrapperStartStopApp org.eclipse.equinox.launcher.Main 4 -configuration /app/webmethods/ISFE58/profiles/IS_default/configuration -service sagis97 com.softwareag.osgi.Bootstrap FALSE 2 remote_shutdown localhost:8245 
+IS_ONP_NPR_RUNNING_COMMANDLINES_02,1814:20 /app/webmethods/ISFE21/jvm/jvm160_64/jre/bin/java -ms256M -mx1024M -XX:MaxPermSize=256M -server -Dsun.lang.ClassLoader.allowArraySyntax=true -Dwatt.server.prepend.classes=:config/Caching:/app/webmethods/ISFE21/IntegrationServer/../common/lib/wm-converters.jar:: -Dwatt.server.append.classes= -Dcom.webmethods.sc.auditing.Use80TableFormat=true -Dtangosol.coherence.shutdownhook=false -DWM_HOME=/app/webmethods/ISFE21/IntegrationServer/.. -Djava.net.preferIPv4Stack=true -XX:MaxPermSize=256M -Dosgi.install.area=/app/webmethods/ISFE21/common/runtime -Declipse.ignoreApp=true -Dosgi.noShutdown=true -Xbootclasspath/a:/app/webmethods/ISFE21/common/runtime/lib/runtime/platform-jaasproxy.jar -cp /app/webmethods/ISFE21/common/runtime/plugins/org.eclipse.equinox.launcher_1.1.0.v20100507.jar org.eclipse.equinox.launcher.Main -configuration /app/webmethods/ISFE21/profiles/IS/configuration 
+IS_ONP_NPR_RUNNING_COMMANDLINES_03,873:06 /app/webmethods/ISFETVB/jvm/jvm160_64/jre/bin/java -ms256M -mx1024M -XX:MaxPermSize=256M -server -Dsun.lang.ClassLoader.allowArraySyntax=true -Dwatt.server.prepend.classes=:config/Caching:/app/webmethods/ISFETVB/IntegrationServer/../common/lib/wm-converters.jar:: -Dwatt.server.append.classes= -Dcom.webmethods.sc.auditing.Use80TableFormat=true -Dtangosol.coherence.shutdownhook=false -DWM_HOME=/app/webmethods/ISFETVB/IntegrationServer/.. -Djava.net.preferIPv4Stack=true -XX:MaxPermSize=256M -Dosgi.install.area=/app/webmethods/ISFETVB/common/runtime -Declipse.ignoreApp=true -Dosgi.noShutdown=true -Xbootclasspath/a:/app/webmethods/ISFETVB/common/runtime/lib/runtime/platform-jaasproxy.jar -cp /app/webmethods/ISFETVB/common/runtime/plugins/org.eclipse.equinox.launcher_1.1.0.v20100507.jar org.eclipse.equinox.launcher.Main -configuration /app/webmethods/ISFETVB/profiles/IS/configuration 
+IS_ONP_NPR_INSTALL_STATUS,installed
+IS_ONP_NPR_INSTALL_COUNT,19
+IS_ONP_NPR_INSTALL_PATH_01,/app/webmethods/ISFE80/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_02,/app/webmethods/ISFECC/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_03,/app/webmethods/ISFE20/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_04,/app/webmethods/ISFE21/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_05,/app/webmethods/ISFE50/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_06,/app/webmethods/ISFE60/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_07,/app/webmethods/ISFETVB/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_08,/app/webmethods/ISFE64/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_09,/app/webmethods/IS1497/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_10,/app/webmethods/ISFE55/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_11,/app/webmethods/ISFE56/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_12,/app/webmethods/ISFE29/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_13,/app/webmethods/ISFE58/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_14,/app/webmethods/ISFE57/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_15,/app/webmethods/ISFE59/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_16,/app/webmethods/ISFE62/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_17,/app/webmethods/ISFE42/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_18,/app/webmethods/ISFE43/IntegrationServer
+IS_ONP_NPR_INSTALL_PATH_19,/app/webmethods/ISFE63/IntegrationServer
+DETECTION_RESULT,SUCCESS
