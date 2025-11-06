@@ -11,7 +11,7 @@
 # - Report generation
 #
 
-set -e  # Exit on first error
+# Note: Do NOT use "set -e" as we want to run all tests and report summary at the end
 
 # Color/prefix definitions (ASCII-7 safe for AIX)
 PASS="[PASS]"
@@ -132,7 +132,8 @@ test_import_csv() {
     run_test "Import all inspector CSV files"
     
     # Count only inspector CSV files (exclude config directory)
-    FIXTURE_COUNT=$(find "$FIXTURES_DIR" -maxdepth 1 -name "*.csv" -type f | wc -l | tr -d ' ')
+    # AIX find doesn't support -maxdepth, so list files directly
+    FIXTURE_COUNT=$(ls -1 "$FIXTURES_DIR"/*.csv 2>/dev/null | wc -l | tr -d ' ')
     print_info "Importing $FIXTURE_COUNT CSV files..."
     
     if "$BINARY" import --db-path "$TEST_DB" --dir "$FIXTURES_DIR" \
@@ -340,7 +341,8 @@ main() {
     fi
     
     # Count only inspector CSV files (exclude config directory)
-    FIXTURE_COUNT=$(find "$FIXTURES_DIR" -maxdepth 1 -name "*.csv" -type f | wc -l | tr -d ' ')
+    # AIX find doesn't support -maxdepth, so list files directly
+    FIXTURE_COUNT=$(ls -1 "$FIXTURES_DIR"/*.csv 2>/dev/null | wc -l | tr -d ' ')
     print_info "Found $FIXTURE_COUNT fixture files"
     
     # Run tests
@@ -351,14 +353,14 @@ main() {
     test_binary_exists
     test_help_command
     test_database_init
-    test_import_csv
-    test_verify_host_counts
-    test_verify_os_distribution
-    test_physical_host_deduplication
-    test_generate_report
-    test_hosts_report
-    test_compliance_report
-    test_verify_database
+    test_import_csv || true
+    test_verify_host_counts || true
+    test_verify_os_distribution || true
+    test_physical_host_deduplication || true
+    test_generate_report || true
+    test_hosts_report || true
+    test_compliance_report || true
+    test_verify_database || true
     
     # Summary
     print_separator
