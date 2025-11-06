@@ -283,107 +283,104 @@ platform-info:
 # If VERSION is not specified, defaults to timestamp
 aix-release: release-for-aix
 release-for-aix: build
-	$(eval VERSION ?= $(shell date +%Y%m%d_%H%M%S))
-	$(eval RELEASE_NAME := iwldr-aix72-$(VERSION))
 	@echo "========================================================================"
 	@echo "Creating AIX Release Package"
 	@echo "========================================================================"
 	@echo ""
-	@echo "Version: $(VERSION)"
-	@echo "Release: $(RELEASE_NAME).tar.gz"
-	@echo ""
-	@echo "Step 1: Building binary..."
-	@mkdir -p target/$(RELEASE_NAME)/bin
-	@mkdir -p target/$(RELEASE_NAME)/lib
-	@mkdir -p target/$(RELEASE_NAME)/acceptance-test/fixtures
-	@mkdir -p target/$(RELEASE_NAME)/acceptance-test/test-data
-	@echo ""
-	@echo "Step 2: Copying binary..."
-	@cp $(BUILD_DIR)/$(BINARY_NAME) target/$(RELEASE_NAME)/bin/$(BINARY_NAME).bin
-	@echo "  Binary: $(BUILD_DIR)/$(BINARY_NAME) -> target/$(RELEASE_NAME)/bin/$(BINARY_NAME).bin"
-	@echo ""
-	@echo "Step 3: Detecting and copying required libraries..."
-	@if command -v ldd >/dev/null 2>&1; then \
+	@VERSION="$${VERSION:-$$(date +%Y%m%d_%H%M%S)}"; \
+	RELEASE_NAME="iwldr-aix72-$$VERSION"; \
+	echo "Version: $$VERSION"; \
+	echo "Release: $${RELEASE_NAME}.tar.gz"; \
+	echo ""; \
+	echo "Step 1: Building binary..."; \
+	mkdir -p target/$${RELEASE_NAME}/bin; \
+	mkdir -p target/$${RELEASE_NAME}/lib; \
+	mkdir -p target/$${RELEASE_NAME}/acceptance-test/fixtures; \
+	mkdir -p target/$${RELEASE_NAME}/acceptance-test/test-data; \
+	echo ""; \
+	echo "Step 2: Copying binary..."; \
+	cp $(BUILD_DIR)/$(BINARY_NAME) target/$${RELEASE_NAME}/bin/$(BINARY_NAME).bin; \
+	echo "  Binary: $(BUILD_DIR)/$(BINARY_NAME) -> target/$${RELEASE_NAME}/bin/$(BINARY_NAME).bin"; \
+	echo ""; \
+	echo "Step 3: Detecting and copying required libraries..."; \
+	if command -v ldd >/dev/null 2>&1; then \
 		echo "  Using ldd to detect dependencies..."; \
-		ldd $(BUILD_DIR)/$(BINARY_NAME) > target/$(RELEASE_NAME)/DETECTED_DEPENDENCIES.txt; \
-		echo "  Dependencies saved to: target/$(RELEASE_NAME)/DETECTED_DEPENDENCIES.txt"; \
+		ldd $(BUILD_DIR)/$(BINARY_NAME) > target/$${RELEASE_NAME}/DETECTED_DEPENDENCIES.txt; \
+		echo "  Dependencies saved to: target/$${RELEASE_NAME}/DETECTED_DEPENDENCIES.txt"; \
 		echo ""; \
 		echo "  Copying gcc-go runtime libraries..."; \
 		for libpath in /opt/freeware/lib/gcc/powerpc-ibm-aix*/*/ppc64/libgo.a; do \
 			if [ -f "$$libpath" ]; then \
-				cp "$$libpath" target/$(RELEASE_NAME)/lib/; \
+				cp "$$libpath" target/$${RELEASE_NAME}/lib/; \
 				echo "    Copied: $$libpath"; \
 				break; \
 			fi; \
 		done; \
 		for libpath in /opt/freeware/lib/gcc/powerpc-ibm-aix*/*/ppc64/libgcc_s.a; do \
 			if [ -f "$$libpath" ]; then \
-				cp "$$libpath" target/$(RELEASE_NAME)/lib/; \
+				cp "$$libpath" target/$${RELEASE_NAME}/lib/; \
 				echo "    Copied: $$libpath"; \
 				break; \
 			fi; \
 		done; \
 	else \
 		echo "  Warning: ldd not available, attempting to copy libraries anyway..."; \
-		cp /opt/freeware/lib/gcc/powerpc-ibm-aix7.2.0.0/13/ppc64/libgo.a target/$(RELEASE_NAME)/lib/ 2>/dev/null || true; \
-		cp /opt/freeware/lib/gcc/powerpc-ibm-aix7.2.0.0/13/ppc64/libgcc_s.a target/$(RELEASE_NAME)/lib/ 2>/dev/null || true; \
-	fi
-	@echo ""
-	@echo "Step 4: Creating wrapper script..."
-	@cp release-templates/wrapper-script.sh target/$(RELEASE_NAME)/bin/$(BINARY_NAME)
-	@chmod +x target/$(RELEASE_NAME)/bin/$(BINARY_NAME)
-	@chmod +x target/$(RELEASE_NAME)/bin/$(BINARY_NAME).bin
-	@echo "  Wrapper created: target/$(RELEASE_NAME)/bin/$(BINARY_NAME)"
-	@echo ""
-	@echo "Step 5: Creating deployment documentation..."
-	@sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/DEPLOY_ON_AIX.md > target/$(RELEASE_NAME)/DEPLOY_ON_AIX.md
-	@echo "  Deployment guide created: target/$(RELEASE_NAME)/DEPLOY_ON_AIX.md"
-	@echo ""
-	@echo "Step 6: Creating README and RELEASE.TXT..."
-	@sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/README.txt > target/$(RELEASE_NAME)/README.txt
-	@echo "=== IBM webMethods License Data Reporter (AIX) ===" > target/$(RELEASE_NAME)/RELEASE.TXT
-	@echo "Version: $(VERSION)" >> target/$(RELEASE_NAME)/RELEASE.TXT
-	@echo "Release Date: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> target/$(RELEASE_NAME)/RELEASE.TXT
-	@echo "Platform: AIX 7.2 (ppc64)" >> target/$(RELEASE_NAME)/RELEASE.TXT
-	@echo "  README created: target/$(RELEASE_NAME)/README.txt"
-	@echo "  RELEASE.TXT created: target/$(RELEASE_NAME)/RELEASE.TXT"
-	@echo ""
-	@echo "Step 7: Copying acceptance test..."
-	@cp release-templates/acceptance-test/RUN_TEST.sh target/$(RELEASE_NAME)/acceptance-test/
-	@cp release-templates/acceptance-test/README.md target/$(RELEASE_NAME)/acceptance-test/
-	@cp release-templates/acceptance-test/fixtures/*.csv target/$(RELEASE_NAME)/acceptance-test/fixtures/
-	@chmod +x target/$(RELEASE_NAME)/acceptance-test/RUN_TEST.sh
-	@echo "  Acceptance test copied: target/$(RELEASE_NAME)/acceptance-test/"
-	@echo "  Test fixtures: $$(ls target/$(RELEASE_NAME)/acceptance-test/fixtures/*.csv | wc -l | tr -d ' ') files"
-	@echo ""
-	@echo "Step 8: Creating release archive..."
-	@cd target && mv $(RELEASE_NAME) iwldr
-	@cd target && tar -cf $(RELEASE_NAME).tar iwldr/
-	@cd target && mv iwldr $(RELEASE_NAME)
-	@cd target && gzip -f $(RELEASE_NAME).tar
-	@echo "  Archive created: target/$(RELEASE_NAME).tar.gz"
-	@echo ""
-	@echo "Step 9: Calculating checksums..."
-	@cd target && sum $(RELEASE_NAME).tar.gz > $(RELEASE_NAME).tar.gz.sum
-	@echo "  Checksum: target/$(RELEASE_NAME).tar.gz.sum"
-	@echo ""
-	@echo "========================================================================"
-	@echo "Release Package Complete!"
-	@echo "========================================================================"
-	@echo ""
-	@echo "Package: target/$(RELEASE_NAME).tar.gz"
-	@ls -lh target/$(RELEASE_NAME).tar.gz 2>/dev/null | awk '{print "Size: " $$5}' || echo "Size: $$(ls -l target/$(RELEASE_NAME).tar.gz | awk '{print $$5}') bytes"
-	@echo ""
-	@echo "Contents:"
-	@gunzip -c target/$(RELEASE_NAME).tar.gz | tar -tf - | head -20
-	@echo ""
-	@echo "To deploy on target AIX system:"
-	@echo "  1. Transfer target/$(RELEASE_NAME).tar.gz to target system"
-	@echo "  2. Extract: gunzip -c $(RELEASE_NAME).tar.gz | tar -xf -"
-	@echo "  3. Read: iwldr/DEPLOY_ON_AIX.md"
-	@echo "  4. Run acceptance test: cd iwldr/acceptance-test && ./RUN_TEST.sh"
-	@echo "  5. If tests pass, proceed with production deployment"
-	@echo ""
+		cp /opt/freeware/lib/gcc/powerpc-ibm-aix7.2.0.0/13/ppc64/libgo.a target/$${RELEASE_NAME}/lib/ 2>/dev/null || true; \
+		cp /opt/freeware/lib/gcc/powerpc-ibm-aix7.2.0.0/13/ppc64/libgcc_s.a target/$${RELEASE_NAME}/lib/ 2>/dev/null || true; \
+	fi; \
+	echo ""; \
+	echo "Step 4: Creating wrapper script..."; \
+	cp release-templates/wrapper-script.sh target/$${RELEASE_NAME}/bin/$(BINARY_NAME); \
+	chmod +x target/$${RELEASE_NAME}/bin/$(BINARY_NAME); \
+	chmod +x target/$${RELEASE_NAME}/bin/$(BINARY_NAME).bin; \
+	echo "  Wrapper created: target/$${RELEASE_NAME}/bin/$(BINARY_NAME)"; \
+	echo ""; \
+	echo "Step 5: Creating deployment documentation..."; \
+	sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/DEPLOY_ON_AIX.md > target/$${RELEASE_NAME}/DEPLOY_ON_AIX.md; \
+	echo "  Deployment guide created: target/$${RELEASE_NAME}/DEPLOY_ON_AIX.md"; \
+	echo ""; \
+	echo "Step 6: Creating README and RELEASE.TXT..."; \
+	sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/README.txt > target/$${RELEASE_NAME}/README.txt; \
+	echo "=== IBM webMethods License Data Reporter (AIX) ===" > target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "Version: $$VERSION" >> target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "Release Date: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "Platform: AIX 7.2 (ppc64)" >> target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "  README created: target/$${RELEASE_NAME}/README.txt"; \
+	echo "  RELEASE.TXT created: target/$${RELEASE_NAME}/RELEASE.TXT"; \
+	echo ""; \
+	echo "Step 7: Copying acceptance test..."; \
+	cp release-templates/acceptance-test/RUN_TEST.sh target/$${RELEASE_NAME}/acceptance-test/; \
+	cp release-templates/acceptance-test/README.md target/$${RELEASE_NAME}/acceptance-test/; \
+	cp release-templates/acceptance-test/fixtures/*.csv target/$${RELEASE_NAME}/acceptance-test/fixtures/; \
+	chmod +x target/$${RELEASE_NAME}/acceptance-test/RUN_TEST.sh; \
+	echo "  Acceptance test copied: target/$${RELEASE_NAME}/acceptance-test/"; \
+	echo "  Test fixtures: $$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/*.csv | wc -l | tr -d ' ') files"; \
+	echo ""; \
+	echo "Step 8: Creating release archive..."; \
+	cd target && mv $${RELEASE_NAME} iwldr && tar -cf $${RELEASE_NAME}.tar iwldr/ && mv iwldr $${RELEASE_NAME} && gzip -f $${RELEASE_NAME}.tar && cd ..; \
+	echo "  Archive created: target/$${RELEASE_NAME}.tar.gz"; \
+	echo ""; \
+	echo "Step 9: Calculating checksums..."; \
+	cd target && sum $${RELEASE_NAME}.tar.gz > $${RELEASE_NAME}.tar.gz.sum && cd ..; \
+	echo "  Checksum: target/$${RELEASE_NAME}.tar.gz.sum"; \
+	echo ""; \
+	echo "========================================================================"; \
+	echo "Release Package Complete!"; \
+	echo "========================================================================"; \
+	echo ""; \
+	echo "Package: target/$${RELEASE_NAME}.tar.gz"; \
+	ls -lh target/$${RELEASE_NAME}.tar.gz 2>/dev/null | awk '{print "Size: " $$5}' || echo "Size: $$(ls -l target/$${RELEASE_NAME}.tar.gz | awk '{print $$5}') bytes"; \
+	echo ""; \
+	echo "Contents:"; \
+	gunzip -c target/$${RELEASE_NAME}.tar.gz | tar -tf - | head -20; \
+	echo ""; \
+	echo "To deploy on target AIX system:"; \
+	echo "  1. Transfer target/$${RELEASE_NAME}.tar.gz to target system"; \
+	echo "  2. Extract: gunzip -c $${RELEASE_NAME}.tar.gz | tar -xf -"; \
+	echo "  3. Read: iwldr/DEPLOY_ON_AIX.md"; \
+	echo "  4. Run acceptance test: cd iwldr/acceptance-test && ./RUN_TEST.sh"; \
+	echo "  5. If tests pass, proceed with production deployment"; \
+	echo ""
 
 # Help target
 help:
