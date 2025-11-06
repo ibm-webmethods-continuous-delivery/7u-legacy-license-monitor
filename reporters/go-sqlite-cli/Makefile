@@ -353,11 +353,11 @@ release-for-aix: build
 	cp release-templates/acceptance-test/README.md target/$${RELEASE_NAME}/acceptance-test/; \
 	cp release-templates/acceptance-test/fixtures/*.csv target/$${RELEASE_NAME}/acceptance-test/fixtures/; \
 	mkdir -p target/$${RELEASE_NAME}/acceptance-test/fixtures/config; \
-	cp release-templates/acceptance-test/fixtures/config/product-codes.csv target/$${RELEASE_NAME}/acceptance-test/fixtures/config/; \
+	cp release-templates/acceptance-test/fixtures/config/*.csv target/$${RELEASE_NAME}/acceptance-test/fixtures/config/; \
 	chmod +x target/$${RELEASE_NAME}/acceptance-test/RUN_TEST.sh; \
 	echo "  Acceptance test copied: target/$${RELEASE_NAME}/acceptance-test/"; \
 	echo "  Test fixtures: $$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/*.csv | wc -l | tr -d ' ') files"; \
-	echo "  Reference data: product-codes.csv"; \
+	echo "  Reference data: $$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/config/*.csv | wc -l | tr -d ' ') files"; \
 	echo ""; \
 	echo "Step 8: Creating release archive..."; \
 	cd target && mv $${RELEASE_NAME} iwldr && tar -cf $${RELEASE_NAME}.tar iwldr/ && mv iwldr $${RELEASE_NAME} && gzip -f $${RELEASE_NAME}.tar && cd ..; \

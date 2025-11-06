@@ -135,7 +135,7 @@ test_import_csv() {
     print_info "Importing $FIXTURE_COUNT CSV files..."
     
     if "$BINARY" import --db-path "$TEST_DB" --dir "$FIXTURES_DIR" \
-        --load-reference --product-codes "$FIXTURES_DIR/config/product-codes.csv" \
+        --load-reference --reference-dir "$FIXTURES_DIR/config" \
         > "$TEMP_OUTPUT" 2>&1; then
         # Check import summary (grep -c returns 1 if no match, need to handle it)
         IMPORTED_COUNT=$(grep -c "successfully imported" "$TEMP_OUTPUT" 2>/dev/null || true)
