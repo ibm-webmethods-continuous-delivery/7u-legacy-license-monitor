@@ -359,11 +359,23 @@ release-for-aix: build
 	echo "  Test fixtures: $$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/*.csv | wc -l | tr -d ' ') files"; \
 	echo "  Reference data: $$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/config/*.csv | wc -l | tr -d ' ') files"; \
 	echo ""; \
-	echo "Step 8: Creating release archive..."; \
+	echo "Step 8: Running acceptance test..."; \
+	echo "  Running test suite to validate package before archiving..."; \
+	cd target/$${RELEASE_NAME}/acceptance-test && ./RUN_TEST.sh && cd ../../..; \
+	if [ $$? -ne 0 ]; then \
+		echo ""; \
+		echo "ERROR: Acceptance test failed!"; \
+		echo "Release package will not be created."; \
+		echo "Please fix the issues and try again."; \
+		exit 1; \
+	fi; \
+	echo "  All acceptance tests passed!"; \
+	echo ""; \
+	echo "Step 9: Creating release archive..."; \
 	cd target && mv $${RELEASE_NAME} iwldr && tar -cf $${RELEASE_NAME}.tar iwldr/ && mv iwldr $${RELEASE_NAME} && gzip -f $${RELEASE_NAME}.tar && cd ..; \
 	echo "  Archive created: target/$${RELEASE_NAME}.tar.gz"; \
 	echo ""; \
-	echo "Step 9: Calculating checksums..."; \
+	echo "Step 10: Calculating checksums..."; \
 	cd target && sum $${RELEASE_NAME}.tar.gz > $${RELEASE_NAME}.tar.gz.sum && cd ..; \
 	echo "  Checksum: target/$${RELEASE_NAME}.tar.gz.sum"; \
 	echo ""; \

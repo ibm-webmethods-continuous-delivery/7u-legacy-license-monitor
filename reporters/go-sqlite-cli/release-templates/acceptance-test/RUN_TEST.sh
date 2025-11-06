@@ -139,14 +139,15 @@ test_import_csv() {
     if "$BINARY" import --db-path "$TEST_DB" --dir "$FIXTURES_DIR" \
         --load-reference --reference-dir "$FIXTURES_DIR/config" \
         > "$TEMP_OUTPUT" 2>&1; then
-        # Check import summary (grep -c returns 1 if no match, need to handle it)
-        IMPORTED_COUNT=$(grep -c "successfully imported" "$TEMP_OUTPUT" 2>/dev/null || true)
+        # Display the import output
+        cat "$TEMP_OUTPUT"
+        # Check import summary - look for "Files processed: N"
+        IMPORTED_COUNT=$(grep "Files processed:" "$TEMP_OUTPUT" 2>/dev/null | awk '{print $NF}' || echo "0")
         IMPORTED_COUNT=${IMPORTED_COUNT:-0}
         if [ "$IMPORTED_COUNT" -eq "$FIXTURE_COUNT" ]; then
             print_pass "All $FIXTURE_COUNT CSV files imported successfully"
         else
             print_fail "Expected $FIXTURE_COUNT imports, got $IMPORTED_COUNT"
-            cat "$TEMP_OUTPUT"
             return 1
         fi
     else
@@ -184,7 +185,8 @@ test_verify_os_distribution() {
     run_test "Verify OS type distribution"
     
     # AIX 6.1
-    AIX61_COUNT=$(sqlite3 "$TEST_DB" "SELECT COUNT(DISTINCT main_fqdn) FROM measurements WHERE os_version LIKE '6.1%';" 2>/dev/null)
+    AIX61_COUNT=$(sqlite3 "$TEST_DB" "SELECT COUNT(DISTINCT main_fqdn) FROM measurements WHERE os_version LIKE '6.1%';" 2>/dev/null || echo "0")
+    AIX61_COUNT=${AIX61_COUNT:-0}
     if [ "$AIX61_COUNT" -eq "$EXPECTED_AIX61" ]; then
         print_pass "Found $AIX61_COUNT AIX 6.1 hosts"
     else
@@ -192,7 +194,8 @@ test_verify_os_distribution() {
     fi
     
     # AIX 7.2
-    AIX72_COUNT=$(sqlite3 "$TEST_DB" "SELECT COUNT(DISTINCT main_fqdn) FROM measurements WHERE os_version LIKE '7.2%';" 2>/dev/null)
+    AIX72_COUNT=$(sqlite3 "$TEST_DB" "SELECT COUNT(DISTINCT main_fqdn) FROM measurements WHERE os_version LIKE '7.2%';" 2>/dev/null || echo "0")
+    AIX72_COUNT=${AIX72_COUNT:-0}
     if [ "$AIX72_COUNT" -eq "$EXPECTED_AIX72" ]; then
         print_pass "Found $AIX72_COUNT AIX 7.2 hosts"
     else
@@ -200,7 +203,8 @@ test_verify_os_distribution() {
     fi
     
     # Solaris
-    SOLARIS_COUNT=$(sqlite3 "$TEST_DB" "SELECT COUNT(DISTINCT main_fqdn) FROM measurements WHERE os_type = 'SunOS';" 2>/dev/null)
+    SOLARIS_COUNT=$(sqlite3 "$TEST_DB" "SELECT COUNT(DISTINCT main_fqdn) FROM measurements WHERE os_type = 'SunOS';" 2>/dev/null || echo "0")
+    SOLARIS_COUNT=${SOLARIS_COUNT:-0}
     if [ "$SOLARIS_COUNT" -eq "$EXPECTED_SOLARIS10" ]; then
         print_pass "Found $SOLARIS_COUNT Solaris hosts"
     else
