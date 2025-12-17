@@ -19,8 +19,6 @@
 
 # shellcheck disable=SC3043,SC2129
 
-set -e
-
 ## Assurance of global public constants
 export IWDLI_DEBUG="${IWDLI_DEBUG:-OFF}"
 export IWDLI_HOME="${IWDLI_HOME:-/tmp/iwdli-home}"
@@ -142,17 +140,18 @@ run_debug_cmd() {
     
     if [ ${__exit_code} -ne 0 ]; then
       logE "Command '$1' completed with exit code: $__exit_code"
+    else
+      logD "Command '$1' completed successfully"
     fi
 
-    logD "Command '$1' completed with exit code: $__exit_code"
     logD "Output saved to: $__out_file"
     logD "Errors saved to: $__err_file"
     
     unset __out_file __err_file __exit_code
-    return 1
+    return 0
   else
-    # Regular execution without debug capture
-    eval "$1"
+    # Regular execution without debug capture - continue on error
+    eval "$1" || true
   fi
 }
 

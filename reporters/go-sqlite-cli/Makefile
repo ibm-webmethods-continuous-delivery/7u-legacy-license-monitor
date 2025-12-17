@@ -31,7 +31,7 @@ PLATFORM = linux-amd64
 # This will override the defaults above
 include build-config.mk
 
-.PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full platform-info release-for-aix aix-release
+.PHONY: all build clean test test-verbose coverage lint init-db build-production build-static build-all build-aix-info acceptance-test test-all help acceptance-test-clean acceptance-test-init acceptance-test-load acceptance-test-verify acceptance-test-full platform-info release-for-aix aix-release linux-release release-for-linux
 
 # Default target
 all: clean test build
@@ -397,6 +397,98 @@ release-for-aix: build
 	echo "  5. If tests pass, proceed with production deployment"; \
 	echo ""
 
+# Create Linux release package with static binary
+# Usage: make release-for-linux VERSION=25B06_1
+# If VERSION is not specified, defaults to timestamp
+linux-release: release-for-linux
+release-for-linux: build-static
+	@echo "========================================================================"
+	@echo "Creating Linux Release Package"
+	@echo "========================================================================"
+	@echo ""
+	@VERSION="$${VERSION:-$$(date +%Y%m%d_%H%M%S)}"; \
+	RELEASE_NAME="iwldr-linux-amd64-$$VERSION"; \
+	echo "Version: $$VERSION"; \
+	echo "Release: $${RELEASE_NAME}.tar.gz"; \
+	echo ""; \
+	echo "Step 1: Building static binary..."; \
+	mkdir -p target/$${RELEASE_NAME}/bin; \
+	mkdir -p target/$${RELEASE_NAME}/acceptance-test/fixtures; \
+	mkdir -p target/$${RELEASE_NAME}/acceptance-test/test-data; \
+	echo ""; \
+	echo "Step 2: Copying static binary..."; \
+	cp $(BUILD_DIR)/$(BINARY_NAME)-static target/$${RELEASE_NAME}/bin/$(BINARY_NAME); \
+	chmod +x target/$${RELEASE_NAME}/bin/$(BINARY_NAME); \
+	echo "  Binary: $(BUILD_DIR)/$(BINARY_NAME)-static -> target/$${RELEASE_NAME}/bin/$(BINARY_NAME)"; \
+	echo ""; \
+	echo "Step 3: Creating deployment documentation..."; \
+	sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/DEPLOY_ON_LINUX.md > target/$${RELEASE_NAME}/DEPLOY_ON_LINUX.md 2>/dev/null || \
+	echo "# Deployment Guide for Linux\n\nBuild Date: $$(date '+%Y-%m-%d %H:%M:%S')\n\n## Installation\n\n1. Extract the archive\n2. Add bin/ to your PATH or copy bin/iwldr to /usr/local/bin\n3. Run acceptance test to verify: cd acceptance-test && ./RUN_TEST.sh\n\n## Usage\n\nRun 'iwldr --help' for usage information." > target/$${RELEASE_NAME}/DEPLOY_ON_LINUX.md; \
+	echo "  Deployment guide created: target/$${RELEASE_NAME}/DEPLOY_ON_LINUX.md"; \
+	echo ""; \
+	echo "Step 4: Creating README and RELEASE.TXT..."; \
+	sed 's/{{BUILD_DATE}}/'"$$(date '+%Y-%m-%d %H:%M:%S')"'/g' release-templates/README.txt > target/$${RELEASE_NAME}/README.txt 2>/dev/null || \
+	echo "IBM webMethods License Data Reporter\nBuild Date: $$(date '+%Y-%m-%d %H:%M:%S')\n\nSee DEPLOY_ON_LINUX.md for installation instructions." > target/$${RELEASE_NAME}/README.txt; \
+	echo "=== IBM webMethods License Data Reporter (Linux) ===" > target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "Version: $$VERSION" >> target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "Release Date: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "Platform: Linux amd64 (static build)" >> target/$${RELEASE_NAME}/RELEASE.TXT; \
+	echo "  README created: target/$${RELEASE_NAME}/README.txt"; \
+	echo "  RELEASE.TXT created: target/$${RELEASE_NAME}/RELEASE.TXT"; \
+	echo ""; \
+	echo "Step 5: Copying acceptance test..."; \
+	cp release-templates/acceptance-test/RUN_TEST.sh target/$${RELEASE_NAME}/acceptance-test/ 2>/dev/null || \
+	echo '#!/bin/bash\nset -e\necho "Running acceptance test..."\n../bin/iwldr init --db-path test-data/test.db\n../bin/iwldr import --db-path test-data/test.db --load-reference --product-codes fixtures/config/product-codes.csv --license-terms fixtures/config/license-terms.csv --dir fixtures\necho "Acceptance test passed!"' > target/$${RELEASE_NAME}/acceptance-test/RUN_TEST.sh; \
+	chmod +x target/$${RELEASE_NAME}/acceptance-test/RUN_TEST.sh; \
+	cp release-templates/acceptance-test/README.md target/$${RELEASE_NAME}/acceptance-test/ 2>/dev/null || \
+	echo "# Acceptance Test\n\nRun ./RUN_TEST.sh to verify the installation." > target/$${RELEASE_NAME}/acceptance-test/README.md; \
+	cp release-templates/acceptance-test/fixtures/*.csv target/$${RELEASE_NAME}/acceptance-test/fixtures/ 2>/dev/null || true; \
+	mkdir -p target/$${RELEASE_NAME}/acceptance-test/fixtures/config; \
+	cp release-templates/acceptance-test/fixtures/config/*.csv target/$${RELEASE_NAME}/acceptance-test/fixtures/config/ 2>/dev/null || true; \
+	echo "  Acceptance test copied: target/$${RELEASE_NAME}/acceptance-test/"; \
+	FIXTURE_COUNT=$$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/*.csv 2>/dev/null | wc -l | tr -d ' '); \
+	CONFIG_COUNT=$$(ls target/$${RELEASE_NAME}/acceptance-test/fixtures/config/*.csv 2>/dev/null | wc -l | tr -d ' '); \
+	echo "  Test fixtures: $$FIXTURE_COUNT files"; \
+	echo "  Reference data: $$CONFIG_COUNT files"; \
+	echo ""; \
+	echo "Step 6: Running acceptance test..."; \
+	echo "  Running test suite to validate package before archiving..."; \
+	cd target/$${RELEASE_NAME}/acceptance-test && ./RUN_TEST.sh && cd ../../..; \
+	if [ $$? -ne 0 ]; then \
+		echo ""; \
+		echo "ERROR: Acceptance test failed!"; \
+		echo "Release package will not be created."; \
+		echo "Please fix the issues and try again."; \
+		exit 1; \
+	fi; \
+	echo "  All acceptance tests passed!"; \
+	echo ""; \
+	echo "Step 7: Creating release archive..."; \
+	cd target && mv $${RELEASE_NAME} iwldr && tar -cf $${RELEASE_NAME}.tar iwldr/ && mv iwldr $${RELEASE_NAME} && gzip -f $${RELEASE_NAME}.tar && cd ..; \
+	echo "  Archive created: target/$${RELEASE_NAME}.tar.gz"; \
+	echo ""; \
+	echo "Step 8: Calculating checksums..."; \
+	cd target && sha256sum $${RELEASE_NAME}.tar.gz > $${RELEASE_NAME}.tar.gz.sha256 && cd ..; \
+	echo "  Checksum: target/$${RELEASE_NAME}.tar.gz.sha256"; \
+	echo ""; \
+	echo "========================================================================"; \
+	echo "Release Package Complete!"; \
+	echo "========================================================================"; \
+	echo ""; \
+	echo "Package: target/$${RELEASE_NAME}.tar.gz"; \
+	ls -lh target/$${RELEASE_NAME}.tar.gz 2>/dev/null | awk '{print "Size: " $$5}' || echo "Size: $$(ls -l target/$${RELEASE_NAME}.tar.gz | awk '{print $$5}') bytes"; \
+	echo ""; \
+	echo "Contents:"; \
+	gunzip -c target/$${RELEASE_NAME}.tar.gz | tar -tf - | head -20; \
+	echo ""; \
+	echo "To deploy on target Linux system:"; \
+	echo "  1. Transfer target/$${RELEASE_NAME}.tar.gz to target system"; \
+	echo "  2. Extract: tar -xzf $${RELEASE_NAME}.tar.gz"; \
+	echo "  3. Read: iwldr/DEPLOY_ON_LINUX.md"; \
+	echo "  4. Run acceptance test: cd iwldr/acceptance-test && ./RUN_TEST.sh"; \
+	echo "  5. If tests pass, proceed with production deployment"; \
+	echo ""
+
 # Help target
 help:
 	@echo "Available targets:"
@@ -435,6 +527,8 @@ help:
 	@echo "  platform-info - Display platform configuration"
 	@echo "  release-for-aix - Create AIX release package with bundled dependencies"
 	@echo "  aix-release - Alias for release-for-aix"
+	@echo "  release-for-linux - Create Linux release package with static binary"
+	@echo "  linux-release - Alias for release-for-linux"
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "Quick Start:"
@@ -446,8 +540,15 @@ help:
 	@echo "  make release-for-aix       - Create deployment package (auto-version)"
 	@echo "  make release-for-aix VERSION=25B06_1  - Create deployment package with version"
 	@echo ""
+	@echo "Linux Build:"
+	@echo "  make build-static          - Build static binary"
+	@echo "  make release-for-linux     - Create deployment package (auto-version)"
+	@echo "  make release-for-linux VERSION=25B06_1  - Create deployment package with version"
+	@echo ""
 	@echo "Release versioning:"
 	@echo "  VERSION parameter is optional (defaults to timestamp YYYYMMDD_HHMMSS)"
 	@echo "  Version is stored in RELEASE.TXT file, not in archive filename"
-	@echo "  Archive name: iwldr-aix72-VERSION.tar.gz"
+	@echo "  Archive names:"
+	@echo "    AIX: iwldr-aix72-VERSION.tar.gz"
+	@echo "    Linux: iwldr-linux-amd64-VERSION.tar.gz"
 	@echo "  Extract folder: iwldr/"
